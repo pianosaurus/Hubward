@@ -1,0 +1,13 @@
+Minedraft, a cartography tool for Minecraft
+Copyright 2010 Ole Christian Tvedt <ole.chr@microman.no>
+
+This software is intended as a companion to Minecraft, a game by
+Mojang Specifications. It will read the saved games from Minecraft and
+render maps covering the explored area.
+
+This software is licensed under the Open Software License version
+3.0. The full text of this license can be found in the file COPYING,
+which is distributed along with the software.
+
+See COPYING for the full text of the license.
+See INSTALL for installation instructions.

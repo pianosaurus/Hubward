@@ -1,0 +1,9 @@
+Global: Add GPL(2?) statements where relevant.
+
+NBT: Add seek functions, and set up renderers to report their needed
+  named tags. That way, the NBT reader can skip past unneeded tags,
+  saving memory and hopefully increase speed.
+
+Level: If no chunks are ready to be rendered, but loading is still in
+  progress, give up a timeslice. There is no need to run all cores at
+  100 %.
