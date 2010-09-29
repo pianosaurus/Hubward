@@ -4,7 +4,7 @@ CFLAGS=-O3 -fopenmp -std=c++0x -pipe
 LIBRARIES=-lz -lpng
 DEFINES=
 OBJECTS=main.o level.o colours.o renderer.o nbt.o nbttags.o chunk.o \
-	pixel.o image.o pvector.o
+	pixel.o image.o pvector.o intstring.o
 
 .PHONY : clean binary
 

@@ -16,6 +16,15 @@ class Image;
  */
 class Renderer {
 public:
+  struct option {
+    char shortopt;
+    std::string longopt;
+    std::string argname;
+    std::string description;
+    std::string defaultval;
+  };
+  static const option options[4];
+
   /* A direction enum. */
   enum direction {
     TOP = 1,
@@ -32,9 +41,12 @@ public:
     ALL = 63
   };
 
-  /* Initialise. */
+  /* Initialise a default renderer with no file output. */
   Renderer(bool oblique = false, direction up = N,
            unsigned int skylight = 127);
+  /* Initialise a renderer based on an option string. Options will be parsed
+     up to the first "-- ", and parsed options will be removed. */
+  Renderer(std::string& options);
 
   /* Clean up*/
   virtual ~Renderer();
@@ -47,7 +59,7 @@ public:
   virtual void render(Chunk& chunk);
 
   /* Finalise and save image. */
-  void save(std::string filename);
+  void save();
 
   /* Set the alpha channel of certain block types. */
   static void set_default_alpha(std::vector<unsigned char>& types,
@@ -62,6 +74,8 @@ protected:
     Pixel top;
     Pixel side;
   };
+
+  std::string filename;
 
   /* Colours of blocks. */
   static colourmap default_colours[256];
@@ -82,6 +96,9 @@ protected:
 
   /* Raw image data. */
   Image* image;
+
+  /* Parse an option. */
+  virtual void parseoption(char shortopt, std::string* argument = 0);
 
   /* Get colour value of a block. */
   virtual Pixel getblock(Chunk& chunk, const pvector& pos, direction dir);

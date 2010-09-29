@@ -1,9 +1,11 @@
 #include "renderer.hpp"
 #include "chunk.hpp"
 #include "image.hpp"
+#include "intstring.hpp"
 
 #include <stdexcept>
 #include <png.h>
+#include <list>
 
 /* Pure renderers cannot be constructed. */
 Renderer::Renderer(bool oblique, direction up, unsigned int skylight)
@@ -13,6 +15,120 @@ Renderer::Renderer(bool oblique, direction up, unsigned int skylight)
     colours[i] = default_colours[i];
   }
 }
+
+/* Initialise a renderer based on an option string. Options will be parsed
+   up to the first "-- ", and parsed options will be removed. */
+Renderer::Renderer(std::string& options) : up(N), oblique(false),
+                                           skylight(127), image(0) {
+  /* Make a local copy of the default colours. */
+  for (int i = 0; i < 256; i++) {
+    colours[i] = default_colours[i];
+  }
+
+  /* Parse options. */
+  std::list<char> opts; // Used short options.
+
+  size_t at = options.find('-');
+  bool canlong = true;
+  bool didlong = false;
+
+  while (at != string::npos) {
+    at++;
+    if (at >= options.length())
+      break;
+
+    /* Get short option equivalent. */
+    char shortopt = 0;
+    if (canlong && options[at] == '-') {
+      /* Long option. */
+      size_t stop = options.find_first_of("= ", at);
+      string longopt;
+      if (stop == string::npos)
+        longopt = options.substr(at + 1);
+      else
+        longopt = options.substr(at + 1, stop - at - 1);
+
+      if (longopt.empty()) {
+        /* Found --, done parsing. */
+        at++;
+        break;
+      }
+      at = stop;
+      for (int i = 0;
+           i < (sizeof(Renderer::options) / sizeof(Renderer::option)); i++) {
+        if (longopt == Renderer::options[i].longopt) {
+          shortopt = Renderer::options[i].shortopt;
+          break;
+        }
+      }
+      if (shortopt == 0) {
+        throw std::logic_error(string("Unknown option --") + longopt);
+      }
+      didlong = true;
+    } else {
+      /* Short option. */
+      canlong = false;
+      shortopt = options[at];
+    }
+
+    /* Make sure the option is not specified twice. */
+    for (std::list<char>::const_iterator it = opts.begin();
+         it != opts.end(); ++it) {
+      if (*it == shortopt) {
+        throw std::logic_error(string("Option -") + shortopt +
+                               " specified twice.");
+      }
+    }
+
+    /* Parse option and handle any arguments. */
+    bool ok = false;
+    std::string argument;
+    size_t stop = at;
+    if (at != string::npos) {
+      at = options.find_first_not_of(' ', at);
+      stop = options.find(' ', at);
+      argument = options.substr(at + 1, stop - at - 1);
+    }
+    for (int i = 0;
+         i < (sizeof(Renderer::options) / sizeof(Renderer::option)); i++) {
+      if (Renderer::options[i].shortopt == shortopt) {
+        if (Renderer::options[i].argname.length() > 0) {
+          parseoption(shortopt, &argument);
+          at = stop;
+        } else {
+          parseoption(shortopt);
+        }
+        ok = true;
+        break;
+      }
+    }
+    if (!ok) {
+      throw std::logic_error(string("Unknown option -") + shortopt);
+    }
+
+    opts.push_back(shortopt);
+
+    if (at == string::npos) {
+      /* Done. */
+      break;
+    } else if (options[at] == ' ' || didlong) {
+      at = options.find('-', at);
+      canlong = true;
+    }
+  }
+
+  if (at == string::npos) {
+    options = "";
+  } else {
+    options = options.substr(at);
+  }
+
+  /* Make sure a filename was set. */
+  if (filename.empty()) {
+    throw std::logic_error("No output filename set.");
+  }
+}
+
 
 /* Release memory. */
 Renderer::~Renderer() {
@@ -50,6 +166,10 @@ void Renderer::render(Chunk& chunk) {
           Pixel under = getblock(chunk, {x, z, y}, TOP);
           if (under.A > 0) {
             under.light(getlight(chunk, {x, z, y}, TOP));
+            /* Adjust lighting slightly depending on height in flat mode. */
+            if (!oblique) {
+              under.light(y + 128);
+            }
             if (under.A > 0) {
               dot.blend_under(under);
               if (dot.A > 0xf0) {
@@ -74,19 +194,19 @@ void Renderer::render(Chunk& chunk) {
 }
 
 /* Finalise and save image. */
-void Renderer::save(std::string filename) {
+void Renderer::save() {
   /* TODO: Finalise. */
   if (image) {
     int angle;
     switch (up) {
     case N: angle = 0; break;
-    case NE: angle = 1; break;
-    case E: angle = 2; break;
-    case SE: angle = 3; break;
+    case NE: angle = 7; break;
+    case E: angle = 6; break;
+    case SE: angle = 5; break;
     case S: angle = 4; break;
-    case SW: angle = 5; break;
-    case W: angle = 6; break;
-    case NW: angle = 7; break;
+    case SW: angle = 3; break;
+    case W: angle = 2; break;
+    case NW: angle = 1; break;
     default:
       throw std::logic_error("Invalid rotation of image.");
     }
@@ -94,6 +214,77 @@ void Renderer::save(std::string filename) {
     rotate.output(filename, angle % 2); // Trim on diagonals.
   } else {
     throw std::logic_error("Attempted to save unrendered image.");
+  }
+}
+
+/* Parse an option. */
+void Renderer::parseoption(char shortopt, std::string* argument) {
+  switch (shortopt) {
+  case 'l': {
+    /* Daylight percentage. */
+    if (*argument == "day" || *argument == "Day" || *argument == "DAY") {
+      skylight = 255;
+    } else if (*argument == "night" || *argument == "Night" ||
+               *argument == "NIGHT") {
+      skylight = 51;
+    } else if (*argument == "twilight" || *argument == "Twilight"
+               || *argument == "TWILIGHT") {
+      skylight = 127;
+    } else {
+      try {
+        int light = stringtoint(*argument);
+        if (light < 0 || light > 100) {
+          throw std::runtime_error("Argument to -l must be "
+                                   "between 0 and 100.");
+        }
+
+        skylight = (255 * light) / 100;
+      } catch (std::runtime_error& e) {
+        throw std::runtime_error("Invalid argument to -l.");
+      }
+    }
+  } break;
+
+  case 'o': {
+    /* Oblique mode. */
+    oblique = true;
+  } break;
+
+  case 'O': {
+    /* Output file name. */
+    filename = *argument;
+  } break;
+
+  case 'r': {
+    /* Rotate. */
+    int upint = -1;
+    try {
+      upint = stringtoint(*argument);
+    } catch (std::runtime_error& e) {}
+
+    if (*argument == "N" || *argument == "n" || upint == 0) {
+      up = N;
+    } else if (*argument == "NE" || *argument == "ne" || upint == 7) {
+      up = NE;
+    } else if (*argument == "E" || *argument == "e" || upint == 6) {
+      up = E;
+    } else if (*argument == "SE" || *argument == "se" || upint == 5) {
+      up = SE;
+    } else if (*argument == "S" || *argument == "s" || upint == 4) {
+      up = S;
+    } else if (*argument == "SW" || *argument == "sw" || upint == 3) {
+      up = SW;
+    } else if (*argument == "W" || *argument == "w" || upint == 2) {
+      up = W;
+    } else if (*argument == "NW" || *argument == "nw" || upint == 1) {
+      up = NW;
+    } else {
+      throw std::runtime_error("Invalid argument to -r.");
+    }
+  } break;
+
+  default:
+    throw std::runtime_error(string("Unable to handle option -") + shortopt);
   }
 }
 
@@ -231,3 +422,16 @@ void Renderer::set_alpha(std::vector<unsigned char>& types,
     }
   }
 }
+
+/* Define renderer arguments. */
+const Renderer::option Renderer::options[] = {
+  {'l', "light", "n",
+   "The percentage of daylight to render. 20 gives a good\n"
+   "night view. May also be one of day, night, twilight.", "50"},
+  {'r', "rotate", "n",
+   "Rotate the map n*45 degrees in a clockwise direction.\n"
+   "You may also specify one of N, NE, E, SE, S, SW, W, NW.", "N"},
+  {'o', "oblique", "", "Not yet implemented."},
+  {'O', "output", "filename",
+   "Output filename, typically specified with a .png suffix."}
+};

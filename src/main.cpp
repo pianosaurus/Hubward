@@ -8,6 +8,7 @@
 #include "level.hpp"
 #include "renderer.hpp"
 #include "image.hpp"
+#include "intstring.hpp"
 
 using std::cout;
 using std::cerr;
@@ -17,30 +18,24 @@ using std::string;
  * Output usage help.
  */
 void usage(const char* binary) {
-  cerr << "Usage:\t" << binary
-       << " [options] <world path | world number>\n";
-  /*TODO
-       << "Options:\n"
+  cerr << "Usage:\t" << binary << " <world> [options]\n\n"
+       << "Options:\n";
 
-       << "  -r <n> | --rotate=<n>\n"
-       << "\tRotate the map n*45 degrees in a clockwise direction.\n";
+  for (int i = 0; i < (sizeof(Renderer::options) / sizeof(Renderer::option));
+       i++) {
+    const Renderer::option o = Renderer::options[i];
+    const string arg = (o.argname.length()) ? "<" + o.argname + ">" : "";
+    cerr << " -" << o.shortopt << arg << " | --" << o.longopt;
+    if (arg.length())
+      cerr << "=" << arg;
+    if (o.defaultval.length())
+      cerr << "  (default " << o.defaultval << ")";
+    cerr << "\n" << o.description << "\n\n";
+  }
 
-       << "  -o | --oblique\n"
-       << "\tRender the map using an oblique projection.\n";
-  */
-}
-
-/*
- * Convert from string to another data type.
- */
-int stringtoint(const string& s)
-{
-  int i = 0;
-  std::istringstream stream(s);
-  if ((stream >> i).fail() || !stream.eof())
-    throw std::runtime_error("Not a number.");
-
-  return i;
+  cerr << "Multiple outputs:\n"
+       << " By separating groups of options using --, you may render several\n"
+       << "maps in one run. You may only render one world per run.\n";
 }
 
 /*
@@ -50,6 +45,9 @@ int main(int argc, char** argv) {
   /* Initialise a variable to hold the path to the world. */
   string worldpath;
 
+  /* A string to hold options for the renderers. */
+  string options;
+
   /* Interpret arguments. */
   for (int i = 1; i < argc; i++) {
     /* Choose what to do depending on first character. */
@@ -58,10 +56,10 @@ int main(int argc, char** argv) {
       continue;
 
     case '-': // An option.
-      //TODO
+      options += string(" ") + argv[i];
       break;
 
-    default: // World path or number.
+    default:  // World path or number.
       if (!worldpath.empty()) {
         /* World path is already set. */
         cerr << "Error: Can't render two worlds at once. "
@@ -114,19 +112,15 @@ int main(int argc, char** argv) {
 
   /* Render the level to memory. */
   std::list<Renderer*> renderers;
-  renderers.push_back(new Renderer());
-  renderers.push_back(new Renderer(false, Renderer::NE, 45));
-  renderers.push_back(new Renderer(false, Renderer::SE, 127));
-  renderers.push_back(new Renderer(false, Renderer::SW, 255));
-  renderers.push_back(new Renderer(false, Renderer::NW, 190));
+  while (!options.empty()) {
+    renderers.push_back(new Renderer(options));
+  }
   level.render(renderers);
 
   /* Output the result. */
-  char i[] = {0x2f, 0};
   for (std::list<Renderer*>::iterator it = renderers.begin();
        it != renderers.end(); ++it) {
-    i[0]++;
-    (*it)->save(std::string("output") + i + ".png");
+    (*it)->save();
   }
 
   /* Finished. */
