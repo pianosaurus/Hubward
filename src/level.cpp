@@ -12,6 +12,17 @@
 
 #include <stdexcept>
 
+/* Yielding some cpu time to other threads. */
+#ifdef __unix__
+  #include <unistd.h>
+  #define yield() usleep(10)
+#elif WIN32
+  #include <windows.h>
+  #define yield() sleep(0)
+#else
+  #define yield()
+#endif
+
 /* Find all chunk files. */
 Level::Level(const std::string& path) {
   std::stack<std::string> directories;
@@ -166,7 +177,8 @@ void Level::render(list<Renderer*>& renderers) {
 #pragma omp critical(chunks)
           chunk = reqwait->second.second;
           while (chunk == 0) {
-            /* TODO: Give up a timeslice. */
+            /* Give up a timeslice. */
+            yield();
 #pragma omp critical(chunks)
             chunk = reqwait->second.second;
           }

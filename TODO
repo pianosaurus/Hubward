@@ -1,9 +1,23 @@
-Global: Add GPL(2?) statements where relevant.
+Global: Add license statements where relevant.
 
-NBT: Add seek functions, and set up renderers to report their needed
-  named tags. That way, the NBT reader can skip past unneeded tags,
-  saving memory and hopefully increase speed.
 
-Level: If no chunks are ready to be rendered, but loading is still in
-  progress, give up a timeslice. There is no need to run all cores at
-  100 %.
+
+NBT class: Add seek functions, and set up renderers to report their
+  needed named tags. That way, the NBT reader can skip past unneeded
+  tags, saving memory and hopefully increase speed.
+
+
+
+
+Planned features:
+  Oblique mode is well underway in Pianosaurus's private repo.
+  Location-based annotations to worlds.
+  Sign-based annotations.
+  Qt GUI.
+  Windows installer based on NSIS.
+  Overlays:
+    Explored caves overlay (based on torches and lack of daylight).
+    Contour lines.
+    Outline (where occlusion starts).
+    Replace trees with a tree symbol.
+    Parchment background.
