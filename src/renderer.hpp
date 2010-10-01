@@ -3,6 +3,7 @@
 
 #include "pixel.hpp"
 #include "pvector.hpp"
+#include "level.hpp"
 
 #include <string>
 #include <vector>
@@ -52,11 +53,11 @@ public:
   virtual ~Renderer();
 
   /* Let the renderer know the coordinates of the map corners. */
-  void set_surface(const pvector& top_right_chunk,
-                   const pvector& bottom_left_chunk);
+  void set_surface(const Level::position& top_right_chunk,
+                   const Level::position& bottom_left_chunk);
 
   /* Pass a chunk to the renderer and let it do its thing. */
-  virtual void render(Chunk& chunk);
+  virtual void render(const Chunk& chunk);
 
   /* Finalise and save image. */
   void save();
@@ -101,10 +102,11 @@ protected:
   virtual void parseoption(char shortopt, std::string* argument = 0);
 
   /* Get colour value of a block. */
-  virtual Pixel getblock(Chunk& chunk, const pvector& pos, direction dir);
+  virtual Pixel getblock(const Chunk& chunk, const pvector& pos,
+                         direction dir);
 
   /* Get lighting value of a block. */
-  virtual unsigned char getlight(Chunk& chunk, const pvector& pos,
+  virtual unsigned char getlight(const Chunk& chunk, const pvector& pos,
                                  direction dir);
 
 

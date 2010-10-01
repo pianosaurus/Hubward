@@ -13,13 +13,13 @@
 #include <stdexcept>
 
 /* Find all chunk files. */
-Level::Level(const string& path) {
-  std::stack<string> directories;
+Level::Level(const std::string& path) {
+  std::stack<std::string> directories;
 
   directories.push(path);
   /* Loop recursively through all found directories. */
   while (!directories.empty()) {
-    string current = directories.top();
+    std::string current = directories.top();
     directories.pop();
 
     DIR* dir = opendir(current.c_str());
@@ -31,7 +31,7 @@ Level::Level(const string& path) {
     /* Loop through all entries in the current directory. */
     dirent* ent;
     while (ent = readdir(dir)) {
-      string entryname = ent->d_name;
+      std::string entryname = ent->d_name;
       if (entryname != "." && entryname != ".." &&
           entryname != "level.dat" && entryname != "level.dat_old" &&
           entryname != "session.lock") {
@@ -44,26 +44,23 @@ Level::Level(const string& path) {
         } else if (S_ISDIR(state.st_mode)) {
           directories.push(entryname);
         } else if (S_ISREG(state.st_mode)) {
-          chunkhead newchunk;
-          newchunk.path = entryname;
-          string x, z;
+          std::string x, z;
 
           /* Parse file name. */
           std::istringstream stream(ent->d_name);
-          string token;
+          std::string token;
           if (!std::getline(stream, token, '.').good() || token != "c" ||
               !std::getline(stream, x, '.').good() ||
               !std::getline(stream, z, '.').good() ||
               !std::getline(stream, token).eof() || token != "dat") {
             std::cerr << "Warning: Unknown file " << ent->d_name << "\n";
           } else {
-            newchunk.pos.x = base36toint(x);
-            newchunk.pos.z = base36toint(z);
+            /* Chunk file name found. Add to map. */
+            position pos(base36toint(z), base36toint(x));
+            chunks.insert(std::pair<position, datasource>
+                          (pos, datasource(entryname, (Chunk*)0)));
+            update_bounds(pos);
           }
-
-          /* Chunk file name found. Add to list. */
-          update_bounds(newchunk.pos);
-          chunks.push_back(newchunk);
         }
       }
     }
@@ -71,35 +68,38 @@ Level::Level(const string& path) {
     /* Done with this directory. Continue with next. */
     closedir(dir);
   }
-
-  /* Make sure the chunks are sorted. */
-  chunks.sort(Level::comparehead);
-  chunks.reverse();
 }
 
 /* Find requested chunk files. */
-Level::Level(const string& path, const list<chunkhead>& intersect) {
+Level::Level(const std::string& path,
+             const std::list<position>& intersect) {
   /* Loop through intersect and see if the corresponding files exist. */
-  for (list<chunkhead>::const_iterator it = intersect.begin();
+  for (std::list<position>::const_iterator it =
+         intersect.begin();
        it != intersect.end(); ++it) {
-    string file = path + "/" + inttobase36((*it).pos.x % 64, true)
-                       + "/" + inttobase36((*it).pos.z % 64, true)
-                       + "/c." + inttobase36((*it).pos.x) + "."
-                       + inttobase36((*it).pos.z) + ".dat";
+    std::string file = path + "/" + inttobase36((*it).second % 64, true)
+                            + "/" + inttobase36((*it).first % 64, true)
+                            + "/c." + inttobase36((*it).second) + "."
+                            + inttobase36((*it).first) + ".dat";
     struct stat state;
     if (stat(file.c_str(), &state) || !S_ISREG(state.st_mode)) {
       std::cerr << "Warning: Couldn't stat file " << file << "\n";
     } else {
-      /* Got a file. Add path name to chunk list. */
-      chunkhead newchunk = {{(*it).pos.x, (*it).pos.z}, file};
-      update_bounds(newchunk.pos);
-      chunks.push_back(newchunk);
+      /* Chunk file name found. Add to map. */
+      position pos((*it).first, (*it).second);
+      chunks.insert(std::pair<position, datasource>
+                    (pos, datasource(file, (Chunk*)0)));
+      update_bounds(pos);
     }
   }
+}
 
-  /* Make sure the chunks are sorted. */
-  chunks.sort(Level::comparehead);
-  chunks.reverse();
+/* Clear chunk map on delete. */
+Level::~Level() {
+  for (chunkmap::reverse_iterator it = chunks.rbegin();
+       it != chunks.rend(); ++it) {
+    delete it->second.second;
+  }
 }
 
 /* Load files while rendering, clear data from memory continuously. */
@@ -115,10 +115,6 @@ void Level::render(list<Renderer*>& renderers) {
     (*renderer)->set_surface(top_right, bottom_left);
   }
 
-  /* Create a stack of loaded chunks. */
-  std::stack<chunkhead*> data;
-  bool done_loading = false;
-
   /* Load and render chunks in parallel. */
   /* TODO: This parallelisation seems to just drown in overhead.
      Apparently, rendering is really fast. Try with more renderers. */
@@ -127,46 +123,37 @@ void Level::render(list<Renderer*>& renderers) {
 #pragma omp section
     {
       /* Load files into memory. */
-      for (list<chunkhead>::iterator it = chunks.begin();
-           it != chunks.end(); ++it) {
-        (*it).data = new Chunk((*it).path, (*it).pos);
-
-#pragma omp critical(chunk_list)
-        data.push(&(*it));
+      for (chunkmap::reverse_iterator it = chunks.rbegin();
+           it != chunks.rend(); ++it) {
+        Chunk* loading = new Chunk(it->second.first, it->first);
+#pragma omp critical(chunks)
+        it->second.second = loading;
       }
-
-#pragma omp critical(chunk_list)
-      done_loading = true;
     }
 
 #pragma omp section
     {
       /* Render loaded chunks. */
-      bool domore;
-#pragma omp critical(chunk_list)
-      domore = !done_loading || !data.empty();
-
-      while (domore) {
-        chunkhead* loaded = 0;
-
-#pragma omp critical(chunk_list)
-        if (!data.empty()) {
-          loaded = data.top();
-          data.pop();
+      for (chunkmap::reverse_iterator it = chunks.rbegin();
+      it != chunks.rend(); ++it) {
+        /* Wait for the chunk's requirements to load. */
+        //#pragma omp critical(chunks)
+        Chunk* chunk = it->second.second;
+        //#pragma omp critical(chunks)
+        while (chunk == 0) {
+          /* TODO: Give up a timeslice. */
+          chunk = it->second.second;
         }
 
-        if (loaded) {
-          /* We have a chunk. Render it. */
-          for (list<Renderer*>::iterator renderer = renderers.begin();
-               renderer != renderers.end(); ++renderer) {
-            (*renderer)->render(*((*loaded).data));
-          }
-
-          delete (*loaded).data;
+        /* We have a chunk. Render it. */
+        for (list<Renderer*>::iterator renderer = renderers.begin();
+             renderer != renderers.end(); ++renderer) {
+          (*renderer)->render(*(it->second.second));
         }
 
-#pragma omp critical(chunk_list)
-        domore = !done_loading || !data.empty();
+        /* Delete chunks that will no longer be needed. */
+        delete it->second.second;
+        it->second.second = 0;
       }
     }
   }
@@ -175,20 +162,21 @@ void Level::render(list<Renderer*>& renderers) {
 }
 
 /* Update bounding box to include pos. */
-void Level::update_bounds(const pvector& pos) {
+void Level::update_bounds(const position& pos) {
   if (chunks.size() == 0) {
     /* This is the first chunk. */
     top_right = bottom_left = pos;
   } else {
-    top_right.x = (pos.x < top_right.x) ? pos.x : top_right.x;
-    top_right.z = (pos.z < top_right.z) ? pos.z : top_right.z;
-    bottom_left.x = (pos.x > bottom_left.x) ? pos.x : bottom_left.x;
-    bottom_left.z = (pos.z > bottom_left.z) ? pos.z : bottom_left.z;
+    if (pos.first < top_right.first) top_right.first = pos.first;
+    if (pos.second < top_right.second) top_right.second = pos.second;
+
+    if (pos.first > bottom_left.first) bottom_left.first = pos.first;
+    if (pos.second > bottom_left.second) bottom_left.second = pos.second;
   }
 }
 
 /* Convert from base36. */
-int Level::base36toint(const string& s) {
+int Level::base36toint(const std::string& s) {
   /* TODO: Overflows on large input. Not relevant to MineDraft, but
      it should be fixed anyway. */
   int result = 0;
@@ -217,8 +205,8 @@ int Level::base36toint(const string& s) {
 }
 
 /* Convert to base36. */
-string Level::inttobase36(int i, bool mod64) {
-  string result;
+std::string Level::inttobase36(int i, bool mod64) {
+  std::string result;
   char prepend[] = {0,0};
 
   if (mod64) {
@@ -247,16 +235,4 @@ string Level::inttobase36(int i, bool mod64) {
   if (result.empty())
     result = "0";
   return result;
-}
-
-/* Compare chunkheads according to position. */
-bool Level::comparehead(const chunkhead& a, const chunkhead& b) {
-  if (a.pos.x < b.pos.x)
-    return true;
-  else if (a.pos.x > b.pos.x)
-    return false;
-  else if (a.pos.z < b.pos.z)
-    return true;
-  else
-    return false;
 }

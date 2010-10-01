@@ -3,12 +3,14 @@
 #include <stdexcept>
 
 /* Open and read file. */
-Chunk::Chunk(std::string filepath, pvector& position)
-  : Parser(filepath), position(position),
+Chunk::Chunk(std::string filepath, const Level::position& pos)
+  : Parser(filepath),
     p_blocks(dynamic_cast<const NBT::TAG_Byte_Array*>(fetch("Level.Blocks"))),
     p_skylight(dynamic_cast<const NBT::TAG_Byte_Array*>(fetch("Level.SkyLight"))),
     p_blocklight(dynamic_cast<const NBT::TAG_Byte_Array*>(fetch("Level.BlockLight"))),
-    p_data(dynamic_cast<const NBT::TAG_Byte_Array*>(fetch("Level.Data"))) {}
+    p_data(dynamic_cast<const NBT::TAG_Byte_Array*>(fetch("Level.Data"))) {
+  position = {pos.second, pos.first, 0};
+}
 
 /* Get block type at position. */
 unsigned char Chunk::blocks(const pvector& pos) const {

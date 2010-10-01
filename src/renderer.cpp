@@ -136,10 +136,10 @@ Renderer::~Renderer() {
 }
 
 /* Let the renderer know the coordinates of the map corners. */
-void Renderer::set_surface(const pvector& top_right_chunk,
-                           const pvector& bottom_left_chunk) {
-  top_right = top_right_chunk;
-  bottom_left = bottom_left_chunk;
+void Renderer::set_surface(const Level::position& top_right_chunk,
+                           const Level::position& bottom_left_chunk) {
+  top_right = { top_right_chunk.second, top_right_chunk.first, 0 };
+  bottom_left = { bottom_left_chunk.second, bottom_left_chunk.first, 0 };
 
   delete image; // Just in case we are rendering more than once.
 
@@ -155,7 +155,7 @@ void Renderer::set_surface(const pvector& top_right_chunk,
 }
 
 /* Pass a chunk to the renderer and let it do its thing. */
-void Renderer::render(Chunk& chunk) {
+void Renderer::render(const Chunk& chunk) {
   if (!oblique) {
     /* Flat map. Render it unrotated. We may rotate it when
        all chunks are rendered. */
@@ -289,7 +289,8 @@ void Renderer::parseoption(char shortopt, std::string* argument) {
 }
 
 /* Get colour value of a block. */
-Pixel Renderer::getblock(Chunk& chunk, const pvector& pos, direction dir) {
+Pixel Renderer::getblock(const Chunk& chunk, const pvector& pos,
+                         direction dir) {
   unsigned char type = chunk.blocks(pos);
   Pixel result = (dir & TOP) ? colours[type].top : colours[type].side;
 
@@ -307,7 +308,7 @@ Pixel Renderer::getblock(Chunk& chunk, const pvector& pos, direction dir) {
 }
 
 /* Get lighting level of a block. */
-unsigned char Renderer::getlight(Chunk& chunk, const pvector& pos,
+unsigned char Renderer::getlight(const Chunk& chunk, const pvector& pos,
                                  direction dir) {
   pvector source = pos;
   if (dir & TOP) {

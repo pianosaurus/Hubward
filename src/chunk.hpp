@@ -2,6 +2,7 @@
 #define H_CHUNK
 
 #include "nbt.hpp"
+#include "level.hpp"
 #include "pvector.hpp"
 
 /*
@@ -19,7 +20,7 @@ private:
 
 public:
   /* Read filepath into memory. */
-  Chunk(std::string filepath, pvector& position);
+  Chunk(std::string filepath, const Level::position& pos);
   /* TODO: Add a no-position constructor, read position from chunk or
      throw an exception. */
 

@@ -3,11 +3,11 @@
 
 #include <string>
 #include <list>
+#include <utility>
+#include <map>
+#include <utility>
 
 #include "pvector.hpp"
-
-using std::string;
-using std::list;
 
 class Renderer;
 class Chunk;
@@ -18,43 +18,40 @@ class Chunk;
  */
 class Level {
 public:
-  /* A struct for the loaded chunk and it's position.
-     0,0 is spawn by default. */
-  struct chunkhead {
-    pvector pos;
-    string path;
-    Chunk* data;
-  };
+  /* Chunk positions given as z,x. */
+  typedef std::pair<int, int> position;
 
   /* Constructors. */
   /* Find all chunk files. */
-  Level(const string& path);
+  Level(const std::string& path);
   /* Find requested chunk files. */
-  Level(const string& path, const list<chunkhead>& intersect);
+  Level(const std::string& path,
+        const std::list<position>& intersect);
+  /* Clear chunk map. */
+  ~Level();
 
   /* Load files while rendering, clear data from memory continuously. */
   void render(Renderer& renderer);
-  void render(list<Renderer*>& renderers);
+  void render(std::list<Renderer*>& renderers);
 
 private:
   /* Levels cannot be copied or assigned. */
   Level(const Level&);
   Level& operator=(const Level&);
 
-  /* List of chunk positions and file paths. */
-  list<chunkhead> chunks;
+  /* Map of chunk positions, chunks and file paths. */
+  typedef std::pair<std::string, Chunk*> datasource; // Chunk file and data.
+  typedef std::map<position, datasource> chunkmap; // A map of chunks in level.
+  chunkmap chunks;
 
   /* Bounding box. */
-  pvector top_right;
-  pvector bottom_left;
-  void update_bounds(const pvector& pos);
+  position top_right;
+  position bottom_left;
+  void update_bounds(const position& pos);
 
   /* Convert to/from base36. */
-  int base36toint(const string& s);
-  string inttobase36(int i, bool mod64 = false);
-
-  /* Compare chunkheads according to position. */
-  static bool comparehead(const chunkhead& a, const chunkhead& b);
+  static int base36toint(const std::string& s);
+  static std::string inttobase36(int i, bool mod64 = false);
 };
 
 #endif

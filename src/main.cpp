@@ -98,16 +98,7 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  /* Load the level. */
-  std::list<Level::chunkhead> tmp;
-  for (int i = -200; i < 200; i++) {
-    tmp.push_back(Level::chunkhead());
-    std::list<Level::chunkhead>::reverse_iterator it = tmp.rbegin();
-    (*it).pos.x = i / 20;
-    (*it).pos.z = i % 20;
-  }
-
-  //Level level(worldpath, tmp);
+  /* Prepare the level (create chunk map). */
   Level level(worldpath);
 
   /* Render the level to memory. */
