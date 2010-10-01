@@ -57,7 +57,9 @@ public:
                    const Level::position& bottom_left_chunk);
 
   /* Pass a chunk to the renderer and let it do its thing. */
-  virtual void render(const Chunk& chunk);
+  virtual void render(const Chunk& chunk,
+                      const Chunk& north, const Chunk& east,
+                      const Chunk& south, const Chunk& west);
 
   /* Finalise and save image. */
   void save();

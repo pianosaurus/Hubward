@@ -115,9 +115,11 @@ void Level::render(list<Renderer*>& renderers) {
     (*renderer)->set_surface(top_right, bottom_left);
   }
 
+
+  /* Initialize iterator for deleting chunks we are finished with. */
+  chunkmap::reverse_iterator deleter = chunks.rbegin();
+
   /* Load and render chunks in parallel. */
-  /* TODO: This parallelisation seems to just drown in overhead.
-     Apparently, rendering is really fast. Try with more renderers. */
 #pragma omp parallel sections
   {
 #pragma omp section
@@ -136,26 +138,92 @@ void Level::render(list<Renderer*>& renderers) {
       /* Render loaded chunks. */
       for (chunkmap::reverse_iterator it = chunks.rbegin();
       it != chunks.rend(); ++it) {
-        /* Wait for the chunk's requirements to load. */
-        //#pragma omp critical(chunks)
-        Chunk* chunk = it->second.second;
-        //#pragma omp critical(chunks)
-        while (chunk == 0) {
-          /* TODO: Give up a timeslice. */
-          chunk = it->second.second;
+        /* Calculate positions of bordering chunks. */
+        position border_pos[4];
+        border_pos[0] = it->first;
+        border_pos[0].first--;  // North
+        border_pos[1] = it->first;
+        border_pos[1].second--; // East
+        border_pos[2] = it->first;
+        border_pos[2].first++;  // South
+        border_pos[3] = it->first;
+        border_pos[3].second++; // West
+
+        /* Wait for the chunk's final requirement to load. */
+        chunkmap::iterator reqit;
+        chunkmap::iterator reqwait = it.base();
+        reqwait--;
+        if ((reqit = chunks.find(border_pos[1])) != chunks.end()) {
+          /* East chunk exists. */
+          reqwait = reqit;
+        }
+        if ((reqit = chunks.find(border_pos[0])) != chunks.end()) {
+          /* North chunk exists. */
+          reqwait = reqit;
+        }
+        {
+          Chunk* chunk;
+#pragma omp critical(chunks)
+          chunk = reqwait->second.second;
+          while (chunk == 0) {
+            /* TODO: Give up a timeslice. */
+#pragma omp critical(chunks)
+            chunk = reqwait->second.second;
+          }
+        }
+
+        /* Chunks are loaded. Get pointers. */
+        Chunk* borders[4] = {};
+        /* North */
+        {
+          if ((reqit = chunks.find(border_pos[0])) != chunks.end()) {
+            borders[0] = reqit->second.second;
+          }
+        }
+        /* East */
+        {
+          if ((reqit = chunks.find(border_pos[1])) != chunks.end()) {
+            borders[1] = reqit->second.second;
+          }
+        }
+        /* South */
+        {
+          if ((reqit = chunks.find(border_pos[2])) != chunks.end()) {
+            borders[2] = reqit->second.second;
+          }
+        }
+        /* West */
+        {
+          if ((reqit = chunks.find(border_pos[3])) != chunks.end()) {
+            borders[3] = reqit->second.second;
+          }
         }
 
         /* We have a chunk. Render it. */
         for (list<Renderer*>::iterator renderer = renderers.begin();
              renderer != renderers.end(); ++renderer) {
-          (*renderer)->render(*(it->second.second));
+          (*renderer)->render(*(it->second.second),
+                              *borders[0], *borders[1],
+                              *borders[2], *borders[3]);
         }
 
         /* Delete chunks that will no longer be needed. */
-        delete it->second.second;
-        it->second.second = 0;
+        while (((deleter->first.first == it->first.first + 1) &&
+                deleter->first.second >= it->first.second) ||
+               (deleter->first.first > it->first.first + 1)) {
+          delete deleter->second.second;
+          deleter->second.second = 0;
+          ++deleter;
+        }
       }
     }
+  }
+
+  /* We are done. Delete the rest of the chunks from memory. */
+  while (deleter != chunks.rend()) {
+    delete deleter->second.second;
+    deleter->second.second = 0;
+    ++deleter;
   }
 
   std::cout << "Loaded " << chunks.size() << " chunks." << std::endl;

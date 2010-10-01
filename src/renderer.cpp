@@ -155,7 +155,9 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
 }
 
 /* Pass a chunk to the renderer and let it do its thing. */
-void Renderer::render(const Chunk& chunk) {
+void Renderer::render(const Chunk& chunk,
+                      const Chunk& north, const Chunk& east,
+                      const Chunk& south, const Chunk& west) {
   if (!oblique) {
     /* Flat map. Render it unrotated. We may rotate it when
        all chunks are rendered. */
