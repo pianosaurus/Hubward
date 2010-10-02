@@ -23,6 +23,8 @@ public:
   Chunk(std::string filepath, const Level::position& pos);
   /* TODO: Add a no-position constructor, read position from chunk or
      throw an exception. */
+  /* Construct an empty dummy chunk. */
+  Chunk(const Level::position& pos);
 
   /* Get positional data. */
   unsigned char blocks(const pvector& pos) const;

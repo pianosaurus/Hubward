@@ -28,6 +28,9 @@ public:
   /* Clean up. */
   virtual ~Image();
 
+  /* Alpha blend another image on top of this one. */
+  void overlay(const Image& source);
+
   /* Write results to file. */
   void output(std::string filename, bool trim = true) const;
 

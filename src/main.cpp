@@ -14,8 +14,8 @@
 #include "image.hpp"
 #include "intstring.hpp"
 #include "options.hpp"
+#include "output.hpp"
 
-using std::cout;
 using std::cerr;
 using std::string;
 using std::list;
@@ -32,9 +32,6 @@ int main(int argc, char** argv) {
 
   /* A variable to hold the path to the world. */
   string worldpath;
-
-  /* Verbosity flag. */
-  bool verbose = false;
 
   /* Strings to hold options for the renderers. */
   list<string> renderstrs;
@@ -97,7 +94,10 @@ int main(int argc, char** argv) {
       return 0;
 
     } else if (opt->first == "verbose") {
-      verbose = true;
+      set_verbose(true);
+
+    } else if (opt->first == "debug") {
+      set_debug(true);
     }
   }
 
@@ -124,17 +124,25 @@ int main(int argc, char** argv) {
   }
 
   /* Prepare the level (create chunk map). */
+  verbose << "Finding files in " << worldpath << std::endl;
   Level level(worldpath);
 
   /* Render to memory. */
+  verbose << "Rendering..." << std::endl;
   level.render(renderers);
 
   /* Output the result. */
-  for (std::list<Renderer*>::iterator it = renderers.begin();
-       it != renderers.end(); ++it) {
-    (*it)->save();
+  verbose << "Finished reading. Writing images to disk." << std::endl;
+  Renderer::RenderList::iterator renderer = renderers.begin();
+  while (!renderers.empty()) {
+    (*renderer)->save();
+
+    /* Delete the renderer, just to be nice. */
+    delete *renderer;
+    renderer = renderers.erase(renderer);
   }
 
   /* Finished. */
+  std::cerr << "Done." << std::endl;
   return 0;
 }

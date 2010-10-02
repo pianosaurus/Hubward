@@ -146,6 +146,17 @@ Image::~Image() {
   delete [] data;
 }
 
+/* Alpha blend another image on top of this one. */
+void Image::overlay(const Image& source) {
+  int xtop = (size.x < source.dimensions().x) ? size.x : source.dimensions().x;
+  int ytop = (size.y < source.dimensions().y) ? size.y : source.dimensions().y;
+  for (int x = 0; x < xtop; x++) {
+    for (int y = 0; y < ytop; y++) {
+      data[y*size.x + x].blend_over(source(x,y));
+    }
+  }
+}
+
 /* Write results to file. */
 void Image::output(std::string filename, bool trim) const {
   int top = 0;

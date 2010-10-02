@@ -12,6 +12,13 @@ Chunk::Chunk(std::string filepath, const Level::position& pos)
   position = {pos.second, pos.first, 0};
 }
 
+/* Construct an empty dummy chunk. */
+Chunk::Chunk(const Level::position& pos) : Parser(),
+                                           p_blocks(0), p_skylight(0),
+                                           p_blocklight(0), p_data(0) {
+  position = {pos.second, pos.first, 0};
+}
+
 /* Get block type at position. */
 unsigned char Chunk::blocks(const pvector& pos) const {
   if (!p_blocks)

@@ -3,31 +3,46 @@
 #include "image.hpp"
 #include "intstring.hpp"
 
+#include "render_contour.hpp"
+
 #include <stdexcept>
 #include <png.h>
 #include <list>
 #include <set>
 
 /* Generate a list of renderers based on an option string. It is the
-   callers responsibility to delete these renderers. */
+   callers responsibility to delete these renderers. If source is
+   given, only one renderer will be created and no filename is parsed.
+   All members of opts may be overridden except rotation and
+   obliqueness. */
 Renderer::RenderList Renderer::make_renderers(const std::string& options,
                                               const recipe* source) {
   RenderList result;
+
   /* Set up lists of requested options. */
   std::list<directionopt> rotations;
   std::list<ucharopt> lightlevels;
   std::list<boolopt> dimdepths;
   std::list<boolopt> obliques;
 
-  /* Separate filename and options. */
-  size_t filestop = options.find(':');
-  std::string filename = options.substr(0, filestop);
-  std::string opts;
+  /* Type of renderer and list of requested overlays. */
+  overlay_type type = DEFAULT;
   std::list<std::string> overlays;
+
+  /* Separate filename and options. */
+  size_t filestop = 0;
+  std::string filename;
+  if (!source) {
+    filestop = options.find(':');
+    filename = options.substr(0, filestop);
+    if (filestop != std::string::npos)
+      filestop++;
+  }
+  std::string opts;
   if (filestop != std::string::npos) {
-    size_t optstop = options.find(':', filestop + 1);
+    size_t optstop = options.find(':', filestop);
     if (optstop != std::string::npos) {
-      opts = options.substr(filestop + 1, optstop - filestop - 1);
+      opts = options.substr(filestop, optstop - filestop);
 
       /* Make a list of overlays */
       size_t olstop;
@@ -40,7 +55,7 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
         olstart = olstop + 1;
       } while (olstop != std::string::npos);
     } else {
-      opts = options.substr(filestop + 1);
+      opts = options.substr(filestop);
     }
   }
 
@@ -51,7 +66,13 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
     optstop = opts.find(',', optstart);
     std::string opt = opts.substr(optstart, optstop - optstart);
     if (!opt.empty()) {
-      if (opt == "n" || opt == "north") {
+      if (opt == "contour") {
+        if (type != DEFAULT && type != CONTOUR) {
+          throw std::logic_error("Multiple overlays must be separated using "
+                                 "the colon character.");
+        }
+        type = CONTOUR;
+      } else if (opt == "n" || opt == "north") {
         rotations.push_back(directionopt(N, "north"));
       } else if (opt == "ne" || opt == "northeast") {
         rotations.push_back(directionopt(NE, "northeast"));
@@ -183,11 +204,28 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
             continue;
           }
 
-          /* Make recipe struct and create renderer. */
+          /* Make recipe struct. */
           const recipe target = {*rotation, *lightlevel, *dimdepth, *oblique};
-          Renderer* add = new Renderer(obliquefile, target);
 
-          /* TODO: Add overlays. */
+          /* Create renderer depending on type. */
+          Renderer* add;
+
+          switch (type) {
+          case DEFAULT:
+            add = new Renderer(obliquefile, target);
+            break;
+          case CONTOUR:
+            add = new Render_Contour("", target);
+            break;
+          }
+
+          /* Add overlays. */
+          for (std::list<std::string>::const_iterator
+                 overlay = overlays.begin(); overlay != overlays.end();
+               ++overlay) {
+            RenderList r = make_renderers(*overlay, &target);
+            add->overlay(*(r.begin()));
+          }
 
           /* Add new renderer to result list. */
           result.push_back(add);
@@ -201,7 +239,7 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
 
 /* Construct renderer. */
 Renderer::Renderer(const std::string& filename, const recipe& options)
-  : options(options), filename(filename), image(0) {
+  : options(options), filename(filename), image(0), finalised(false) {
   /* Make a local copy of the default colours. */
   for (int i = 0; i < 256; i++) {
     colours[i] = default_colours[i];
@@ -210,6 +248,12 @@ Renderer::Renderer(const std::string& filename, const recipe& options)
 
 /* Release memory. */
 Renderer::~Renderer() {
+  RenderList::iterator overlay = overlays.begin();
+  while (!overlays.empty()) {
+    delete *overlay;
+    overlay = overlays.erase(overlay);
+  }
+
   delete image;
 }
 
@@ -219,7 +263,9 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
   top_right = { top_right_chunk.second, top_right_chunk.first, 0 };
   bottom_left = { bottom_left_chunk.second, bottom_left_chunk.first, 0 };
 
-  delete image; // Just in case we are rendering more than once.
+  /* Make sure we only do this once. */
+  if (image)
+    throw std::runtime_error("Attempted to allocate image memory twice.");
 
   if (!options.oblique.first) {
     /* Allocate memory for a flat unrotated map. We may rotate
@@ -229,6 +275,12 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
     image = new Image({size.z, size.x});
   } else {
     /* TODO: Calculate size of oblique map. */
+  }
+
+  /* Allocate for all overlays too. */
+  for (RenderList::iterator overlay = overlays.begin();
+       overlay != overlays.end(); ++overlay) {
+    (*overlay)->set_surface(top_right_chunk, bottom_left_chunk);
   }
 }
 
@@ -270,6 +322,12 @@ void Renderer::render(const chunkbox& chunks) {
     /* Oblique map. */
     /* TODO */
   }
+
+  /* Render all overlays too. */
+  for (RenderList::iterator overlay = overlays.begin();
+       overlay != overlays.end(); ++overlay) {
+    (*overlay)->render(chunks);
+  }
 }
 
 /* Make any last minute adjustments. */
@@ -277,7 +335,16 @@ void Renderer::finalise() {
   if (options.oblique.first) {
     /* TODO: Finalise oblique images. */
   }
-  /* TODO: Write overlays. */
+
+  /* Blend overlays. */
+  for (RenderList::iterator it = overlays.begin();
+       it != overlays.end(); ++it) {
+    (*it)->finalise();
+
+    image->overlay((*it)->get_image());
+  }
+
+  finalised = true;
 }
 
 /* Finalise and save image. */
@@ -407,6 +474,14 @@ Chunk* Renderer::fixpvector(const chunkbox& chunks, pvector& pos) {
   return target;
 }
 
+/* Return a reference to the image. Can only be done after it has been
+   finalised. The reference is valid until the renderer is deleted. */
+const Image& Renderer::get_image() const {
+  if (finalised)
+    return *image;
+
+  throw std::runtime_error("Trying to fetch unfinished image.");
+}
 
 /* Set the alpha channel of certain block types. */
 void Renderer::set_default_alpha(std::vector<unsigned char>& types,

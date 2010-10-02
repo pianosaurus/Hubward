@@ -41,6 +41,12 @@ public:
     ALL = 63
   };
 
+  /* Possible overlays. */
+  enum overlay_type {
+    DEFAULT,
+    CONTOUR
+  };
+
   /* Option values, and the input strings used to set them. */
   typedef std::pair<direction, std::string> directionopt;
   typedef std::pair<unsigned char, std::string> ucharopt;
@@ -56,8 +62,9 @@ public:
 
   /* Generate a list of renderers based on an option string. It is the
      callers responsibility to delete these renderers. If source is
-     given, only one renderer will be created. All members of opts may
-     be overridden except rotation. */
+     given, only one renderer will be created and no filename is
+     parsed.  All members of opts may be overridden except rotation
+     and obliqueness. */
   typedef std::list<Renderer*> RenderList;
   static RenderList make_renderers(const std::string& options,
                                    const recipe* source = 0);
@@ -80,6 +87,10 @@ public:
 
   /* Save image. */
   void save();
+
+  /* Return a reference to the image. Can only be done after it has been
+     finalised. The reference is valid until the renderer is deleted. */
+  const Image& get_image() const;
 
   /* Set the alpha channel of certain block types. */
   static void set_default_alpha(std::vector<unsigned char>& types,
@@ -109,8 +120,14 @@ protected:
   pvector top_right;
   pvector bottom_left;
 
-  /* Raw image data. */
+  /* Rendered image. */
   Image* image;
+
+  /* Overlays. */
+  RenderList overlays;
+
+  /* Is the renderer finalised? */
+  bool finalised;
 
   /* Get colour value of a block. */
   virtual Pixel getblock(const chunkbox& chunks, pvector pos,
@@ -124,6 +141,9 @@ protected:
      passed in may point outside the center chunk. */
   static Chunk* fixpvector(const chunkbox& chunks, pvector& pos);
 
+  /* Add another renderer as an overlay to this one. This will take
+     ownership, and the overlays will be deleted along with self. */
+  void overlay(Renderer* renderer) { overlays.push_back(renderer); };
 
 private:
   /* Don't allow copy construction or assignment. */

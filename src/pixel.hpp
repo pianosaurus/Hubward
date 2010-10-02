@@ -24,6 +24,9 @@ public:
   /* Blend another pixel underneath self. */
   void blend_under(const Pixel& source);
 
+  /* Blend another pixel over self. */
+  void blend_over(const Pixel& source);
+
   /* Shade pixel. 0 = no change, +/- 127 = white/black.. */
   void shade(signed char value);
 

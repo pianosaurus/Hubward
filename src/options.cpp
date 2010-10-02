@@ -1,9 +1,10 @@
 #include "options.hpp"
 
+#include "version.h"
+
 #include <iostream>
 #include <stdexcept>
 
-using std::cout;
 using std::cerr;
 using std::string;
 using std::list;
@@ -16,36 +17,76 @@ const struct option {
   string argname;
   string description;
 } valid_options[] = {
+  { 0, "debug", false, "", "Enable debugging output."},
   { 'n', "number", true, "n", "The world number to render. This or -p must "
                               "be specified."},
   { 'p', "path", true, "path", "The path of the world to render. This or -n "
                                "must be specified."},
-  { 0, "version", false, "", "Print the version of this release and exit." },
-  { 'v', "verbose", false, "", "Print more status information." }
+  { 'v', "verbose", false, "", "Print more status information." },
+  { 0, "version", false, "", "Print the version of this release and exit." }
 };
 
 /*
  * Output usage help.
  */
 void usage(const char* binary) {
-  cerr << "Usage:\t" << binary << " <world> [options]\n\n"
+  cerr << APPNAME << " " << APPVERSION << "\n";
+  cerr << "Usage:\t" << binary << " <options> <renderspec1> [renderspec2 [...]]\n\n"
        << "Options:\n";
 
   /* Print all valid options. */
   for (int v = 0; v < sizeof(valid_options)/sizeof(option); v++) {
     /* Short version. */
-    cerr << "-" << valid_options[v].shortopt;
-    if (valid_options[v].argument)
-      cerr << "<" << valid_options[v].argname << ">";
+    if (valid_options[v].shortopt) {
+      cerr << "  -" << valid_options[v].shortopt;
+      if (valid_options[v].argument)
+        cerr << "<" << valid_options[v].argname << ">";
+      cerr << "\n";
+    }
 
     /* Long version. */
-    cerr << " | --" << valid_options[v].longopt;
+    cerr << "  --" << valid_options[v].longopt;
     if (valid_options[v].argument)
       cerr << "=<" << valid_options[v].argname << ">";
 
     /* Description. */
     cerr << "\n\t" << valid_options[v].description << "\n";
   }
+
+  /* Describe the renderspec. */
+  cerr << "\nRenderspecs:\n"
+       << "\t<filename>[:keywords[:overlay1[:overlay2[...]]]\n\n";
+  cerr << "  Rotation keywords [%r]: (defaults to <north>)\n"
+       << "\t<n, nw, w, sw, s, se, e, ne> or the equivalent <north northwest\n"
+       << "\twest, southwest, south, southeast, east, northeast>.\n";
+  cerr << "  Lighting keywords [%l]: (defaults to <twilight>)\n"
+       << "\t<day, night, twilight, lightNNN>, where NNN is a number\n"
+       << "\tbetween 0 and 255 inclusive.\n";
+  cerr << "  Depth dimming keywords [%d]: (defaults to <dimdepth)\n"
+       << "\t<dimdepth, litdepth>. Use dimdepth to adjust brightness of\n"
+       << "\tthe surface depending on height. This will enable you to see\n"
+       << "\theight features on top-down maps.\n";
+  cerr << "  Special keywords: (defaults to nothing)\n"
+       << "\t<contour> draws contour lines on a transparent background.\n";
+  cerr << "\n  Overlays can be added with all the same keywords except\n"
+       << "  rotation. The specials make good overlays, as they have\n"
+       << "  transparent backgrounds.\n";
+
+  /* Describe multiples. */
+  cerr << "\nMultiples:\n"
+       << "  You may specify multiple keywords in any of the keyword groups\n"
+       << "  above to render several maps at once. You must also add the\n"
+       << "  %-marker in the square brackets of that group to the file name.\n"
+       << "  This marker will be replaced with the keyword being rendered.\n";
+
+  /* This is complex, so give some examples. */
+  cerr << "\nExamples:\n";
+  cerr << "  Render a default map:\n"
+       << "\t" << binary << " -n2 map.png\n";
+  cerr << "  Render three maps with various lighting conditions:\n"
+       << "\t" << binary << " -n2 map-%l.png:day,night,twilight\n";
+  cerr << "  Render a map facing east with contour lines:\n"
+       << "\t" << binary << " -n2 map.png:east:contour\n";
 }
 
 /*

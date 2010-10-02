@@ -19,8 +19,7 @@ Parser::Parser(std::string filepath) {
         int err;
         throw std::runtime_error(gzerror(file, &err));
       }
-      throw std::runtime_error(string("Root tag is not compound in")
-                               + filepath);
+      throw std::runtime_error(string("Root tag is not compound"));
     }
     root.get(file, true);
   } catch (std::runtime_error& e) {

@@ -3,8 +3,9 @@ CC=g++
 CFLAGS=-O3 -fopenmp -std=c++0x -pipe
 LIBRARIES=-lz -lpng
 DEFINES=
-OBJECTS=main.o level.o colours.o nbt.o nbttags.o chunk.o intstring.o options.o\
-	pixel.o image.o pvector.o renderer.o render_contour.o
+OBJECTS=main.o output.o level.o colours.o nbt.o nbttags.o chunk.o	\
+	intstring.o options.o pixel.o image.o pvector.o renderer.o	\
+	render_contour.o
 
 .PHONY : clean binary
 

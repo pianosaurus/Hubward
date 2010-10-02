@@ -1,9 +1,6 @@
 Global:
   Add license statements where relevant.
-  Add try blocks at decent places. We want to finish rendering even if
-  a chunk fails. Just print a warning.
-  Add verbose output. The option does nothing now.
-
+  Create a man page.
 
 
 NBT class: Add seek functions, and set up renderers to report their
@@ -11,6 +8,10 @@ NBT class: Add seek functions, and set up renderers to report their
   tags, saving memory and hopefully increase speed.
 
 intstring: Put base36 conversions here.
+
+Renderer: Find out what is wrong with the chunk boundaries. See
+  boxy output of contour.
+
 
 
 Planned features:
@@ -26,7 +27,6 @@ Planned features:
     Complete options string used to render
   Overlays:
     Explored caves overlay (based on torches and lack of daylight).
-    Contour lines.
     Outline (where occlusion starts).
     Tree symbols.
     Parchment background.

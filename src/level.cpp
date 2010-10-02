@@ -1,10 +1,10 @@
+#include "output.hpp"
 #include "level.hpp"
 #include "chunk.hpp"
 #include "renderer.hpp"
 #include "image.hpp"
 
 #include <sstream>
-#include <iostream>
 #include <stack>
 
 #include <dirent.h>
@@ -35,7 +35,8 @@ Level::Level(const std::string& path) {
 
     DIR* dir = opendir(current.c_str());
     if (!dir) {
-      std::cerr << "Warning: Couldn't open directory: " << current << "\n";
+      std::cerr << "Warning: Couldn't open directory: "
+                << current << std::endl;;
       continue;
     }
 
@@ -51,7 +52,8 @@ Level::Level(const std::string& path) {
         /* Find out if entry is a directory or a file. */
         struct stat state;
         if (stat(entryname.c_str(), &state)) {
-          std::cerr << "Warning: Couldn't stat file " << ent->d_name << "\n";
+          std::cerr << "Warning: Couldn't stat file "
+                    << ent->d_name << std::endl;
         } else if (S_ISDIR(state.st_mode)) {
           directories.push(entryname);
         } else if (S_ISREG(state.st_mode)) {
@@ -64,7 +66,7 @@ Level::Level(const std::string& path) {
               !std::getline(stream, x, '.').good() ||
               !std::getline(stream, z, '.').good() ||
               !std::getline(stream, token).eof() || token != "dat") {
-            std::cerr << "Warning: Unknown file " << ent->d_name << "\n";
+            verbose << "Ignoring unknown file " << ent->d_name << std::endl;
           } else {
             /* Chunk file name found. Add to map. */
             position pos(base36toint(z), base36toint(x));
@@ -138,9 +140,17 @@ void Level::render(list<Renderer*>& renderers) {
       /* Load files into memory. */
       for (chunkmap::reverse_iterator it = chunks.rbegin();
            it != chunks.rend(); ++it) {
-        Chunk* loading = new Chunk(it->second.first, it->first);
+        Chunk* load;
+        try {
+          load = new Chunk(it->second.first, it->first);
+        } catch (std::exception& e) {
+          std::cerr << "Failed to load chunk "
+                    << it->first.second << "x" << it->first.first << std::endl;
+          debug << e.what() << std::endl;
+          load = new Chunk(it->first);
+        }
 #pragma omp critical(chunks)
-        it->second.second = loading;
+        it->second.second = load;
       }
     }
 
@@ -203,10 +213,17 @@ void Level::render(list<Renderer*>& renderers) {
           chunkbox.west = reqit->second.second;
         }
 
-        /* We have a chunk. Render it. */
+        /* We have a chunk. Try to render it. */
         for (list<Renderer*>::iterator renderer = renderers.begin();
              renderer != renderers.end(); ++renderer) {
-          (*renderer)->render(chunkbox);
+          try {
+            (*renderer)->render(chunkbox);
+          } catch (std::exception& e) {
+            std::cerr << "Failed to render chunk "
+                      << it->first.second << "x"
+                      << it->first.first << std::endl;
+            debug << e.what() << std::endl;
+          }
         }
 
         /* Delete chunks that will no longer be needed. */
@@ -234,7 +251,7 @@ void Level::render(list<Renderer*>& renderers) {
     (*renderer)->finalise();
   }
 
-  std::cout << "Loaded " << chunks.size() << " chunks." << std::endl;
+  verbose << "Loaded " << chunks.size() << " chunks." << std::endl;
 }
 
 /* Update bounding box to include pos. */

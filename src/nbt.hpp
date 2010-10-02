@@ -19,6 +19,8 @@ namespace NBT {
   public:
     /* Read filepath into memory. */
     Parser(std::string filepath);
+    /* Create an empty dummy NBT. */
+    Parser() {};
 
     /* Print structure of named tags. */
     void print_structure(std::ostream& out);
