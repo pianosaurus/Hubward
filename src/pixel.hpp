@@ -17,6 +17,10 @@ public:
   Pixel(unsigned char sR, unsigned char sG,
         unsigned char sB, unsigned char sA) : R(sR), G(sG), B(sB), A(sA) {};
 
+  /* Compare with another pixel. */
+  bool operator==(const Pixel& o) { return R==o.R && G==o.G &&
+                                           B==o.B && A==o.A; };
+
   /* Blend another pixel underneath self. */
   void blend_under(const Pixel& source);
 

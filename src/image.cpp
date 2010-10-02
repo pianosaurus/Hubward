@@ -242,6 +242,14 @@ void Image::output(std::string filename, bool trim) const {
   fclose(fp);
 }
 
+/* Colour replace. */
+void Image::colour_replace(const Pixel& from, const Pixel& to) {
+  for (int i = 0; i < size.x * size.y; i++) {
+    if (data[i] == from)
+      data[i] = to;
+  }
+}
+
 /* Return a pixel. */
 Pixel& Image::operator()(int x, int y) {
   if (x < 0 || x >= size.x) {

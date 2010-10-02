@@ -185,38 +185,28 @@ void Level::render(list<Renderer*>& renderers) {
         }
 
         /* Chunks are loaded. Get pointers. */
-        Chunk* borders[4] = {};
+        Renderer::chunkbox chunkbox = {it->second.second, 0, 0, 0, 0};
         /* North */
-        {
-          if ((reqit = chunks.find(border_pos[0])) != chunks.end()) {
-            borders[0] = reqit->second.second;
-          }
+        if ((reqit = chunks.find(border_pos[0])) != chunks.end()) {
+          chunkbox.north = reqit->second.second;
         }
         /* East */
-        {
-          if ((reqit = chunks.find(border_pos[1])) != chunks.end()) {
-            borders[1] = reqit->second.second;
-          }
+        if ((reqit = chunks.find(border_pos[1])) != chunks.end()) {
+          chunkbox.east = reqit->second.second;
         }
         /* South */
-        {
-          if ((reqit = chunks.find(border_pos[2])) != chunks.end()) {
-            borders[2] = reqit->second.second;
-          }
+        if ((reqit = chunks.find(border_pos[2])) != chunks.end()) {
+          chunkbox.south = reqit->second.second;
         }
         /* West */
-        {
-          if ((reqit = chunks.find(border_pos[3])) != chunks.end()) {
-            borders[3] = reqit->second.second;
-          }
+        if ((reqit = chunks.find(border_pos[3])) != chunks.end()) {
+          chunkbox.west = reqit->second.second;
         }
 
         /* We have a chunk. Render it. */
         for (list<Renderer*>::iterator renderer = renderers.begin();
              renderer != renderers.end(); ++renderer) {
-          (*renderer)->render(*(it->second.second),
-                              *borders[0], *borders[1],
-                              *borders[2], *borders[3]);
+          (*renderer)->render(chunkbox);
         }
 
         /* Delete chunks that will no longer be needed. */
@@ -236,6 +226,12 @@ void Level::render(list<Renderer*>& renderers) {
     delete deleter->second.second;
     deleter->second.second = 0;
     ++deleter;
+  }
+
+  /* Finalise all renderers. */
+  for (list<Renderer*>::iterator renderer = renderers.begin();
+       renderer != renderers.end(); ++renderer) {
+    (*renderer)->finalise();
   }
 
   std::cout << "Loaded " << chunks.size() << " chunks." << std::endl;

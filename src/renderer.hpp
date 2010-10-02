@@ -5,6 +5,7 @@
 #include "pvector.hpp"
 #include "level.hpp"
 
+#include <list>
 #include <string>
 #include <vector>
 
@@ -12,19 +13,17 @@ class Chunk;
 class Image;
 
 /*
- * This class does the rendering and outputs to filesystem.
- * It is not meant to be used directly, but to be subclassed.
+ * This class does the default rendering and outputs to filesystem.
  */
 class Renderer {
 public:
-  struct option {
-    char shortopt;
-    std::string longopt;
-    std::string argname;
-    std::string description;
-    std::string defaultval;
+  struct chunkbox {
+    Chunk* center; // Chunk being rendered.
+    Chunk* north;  // North neighbour.
+    Chunk* east;   // East neighbour.
+    Chunk* south;  // South neighbour.
+    Chunk* west;   // West neighbour.
   };
-  static const option options[4];
 
   /* A direction enum. */
   enum direction {
@@ -42,12 +41,29 @@ public:
     ALL = 63
   };
 
-  /* Initialise a default renderer with no file output. */
-  Renderer(bool oblique = false, direction up = N,
-           unsigned int skylight = 127);
-  /* Initialise a renderer based on an option string. Options will be parsed
-     up to the first "-- ", and parsed options will be removed. */
-  Renderer(std::string& options);
+  /* Option values, and the input strings used to set them. */
+  typedef std::pair<direction, std::string> directionopt;
+  typedef std::pair<unsigned char, std::string> ucharopt;
+  typedef std::pair<bool, std::string> boolopt;
+
+  /* Holds the needed info to create a renderer. */
+  struct recipe {
+    directionopt dir;
+    ucharopt lightlevel;
+    boolopt dimdepth;
+    boolopt oblique;
+  };
+
+  /* Generate a list of renderers based on an option string. It is the
+     callers responsibility to delete these renderers. If source is
+     given, only one renderer will be created. All members of opts may
+     be overridden except rotation. */
+  typedef std::list<Renderer*> RenderList;
+  static RenderList make_renderers(const std::string& options,
+                                   const recipe* source = 0);
+
+  /* Construct renderer. */
+  Renderer(const std::string& filename, const recipe& options);
 
   /* Clean up*/
   virtual ~Renderer();
@@ -57,11 +73,12 @@ public:
                    const Level::position& bottom_left_chunk);
 
   /* Pass a chunk to the renderer and let it do its thing. */
-  virtual void render(const Chunk& chunk,
-                      const Chunk& north, const Chunk& east,
-                      const Chunk& south, const Chunk& west);
+  virtual void render(const chunkbox& chunks);
 
-  /* Finalise and save image. */
+  /* Make any last minute adjustments. */
+  virtual void finalise();
+
+  /* Save image. */
   void save();
 
   /* Set the alpha channel of certain block types. */
@@ -78,20 +95,15 @@ protected:
     Pixel side;
   };
 
+  /* Holds the options used to create the renderer.*/
+  recipe options;
+
+  /* File path and name this render will be written to. */
   std::string filename;
 
   /* Colours of blocks. */
   static colourmap default_colours[256];
   colourmap colours[256];
-
-  /* Map up direction. */
-  direction up;
-
-  /* Whether the view is angled instead of top-down. */
-  bool oblique;
-
-  /* Lighting type. */
-  unsigned char skylight;
 
   /* World position of corner chunks. */
   pvector top_right;
@@ -100,22 +112,28 @@ protected:
   /* Raw image data. */
   Image* image;
 
-  /* Parse an option. */
-  virtual void parseoption(char shortopt, std::string* argument = 0);
-
   /* Get colour value of a block. */
-  virtual Pixel getblock(const Chunk& chunk, const pvector& pos,
+  virtual Pixel getblock(const chunkbox& chunks, pvector pos,
                          direction dir);
 
   /* Get lighting value of a block. */
-  virtual unsigned char getlight(const Chunk& chunk, const pvector& pos,
+  virtual unsigned char getlight(const chunkbox& chunks, pvector pos,
                                  direction dir);
+
+  /* Convert a chunkbox-pvector combo to a chunk-pvector combo. The pvector
+     passed in may point outside the center chunk. */
+  static Chunk* fixpvector(const chunkbox& chunks, pvector& pos);
 
 
 private:
   /* Don't allow copy construction or assignment. */
   Renderer(const Renderer& source);
   Renderer& operator=(const Renderer& source);
+
+  /* Wildcard replacement for file names. */
+  static std::string wildcard(const std::string& filename,
+                              const std::string& wildcard,
+                              const std::string& replacement);
 
 };
 

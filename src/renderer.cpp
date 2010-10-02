@@ -6,129 +6,207 @@
 #include <stdexcept>
 #include <png.h>
 #include <list>
+#include <set>
 
-/* Pure renderers cannot be constructed. */
-Renderer::Renderer(bool oblique, direction up, unsigned int skylight)
-  : up(up), oblique(oblique), skylight(skylight), image(0) {
-  /* Make a local copy of the default colours. */
-  for (int i = 0; i < 256; i++) {
-    colours[i] = default_colours[i];
-  }
-}
+/* Generate a list of renderers based on an option string. It is the
+   callers responsibility to delete these renderers. */
+Renderer::RenderList Renderer::make_renderers(const std::string& options,
+                                              const recipe* source) {
+  RenderList result;
+  /* Set up lists of requested options. */
+  std::list<directionopt> rotations;
+  std::list<ucharopt> lightlevels;
+  std::list<boolopt> dimdepths;
+  std::list<boolopt> obliques;
 
-/* Initialise a renderer based on an option string. Options will be parsed
-   up to the first "-- ", and parsed options will be removed. */
-Renderer::Renderer(std::string& options) : up(N), oblique(false),
-                                           skylight(127), image(0) {
-  /* Make a local copy of the default colours. */
-  for (int i = 0; i < 256; i++) {
-    colours[i] = default_colours[i];
-  }
+  /* Separate filename and options. */
+  size_t filestop = options.find(':');
+  std::string filename = options.substr(0, filestop);
+  std::string opts;
+  std::list<std::string> overlays;
+  if (filestop != std::string::npos) {
+    size_t optstop = options.find(':', filestop + 1);
+    if (optstop != std::string::npos) {
+      opts = options.substr(filestop + 1, optstop - filestop - 1);
 
-  /* Parse options. */
-  std::list<char> opts; // Used short options.
+      /* Make a list of overlays */
+      size_t olstop;
+      size_t olstart = optstop + 1;
+      do {
+        olstop = options.find(':', olstart);
 
-  size_t at = options.find('-');
-  bool canlong = true;
-  bool didlong = false;
+        overlays.push_back(options.substr(olstart, olstop - olstart));
 
-  while (at != string::npos) {
-    at++;
-    if (at >= options.length())
-      break;
-
-    /* Get short option equivalent. */
-    char shortopt = 0;
-    if (canlong && options[at] == '-') {
-      /* Long option. */
-      size_t stop = options.find_first_of("= ", at);
-      string longopt;
-      if (stop == string::npos)
-        longopt = options.substr(at + 1);
-      else
-        longopt = options.substr(at + 1, stop - at - 1);
-
-      if (longopt.empty()) {
-        /* Found --, done parsing. */
-        at++;
-        break;
-      }
-      at = stop;
-      for (int i = 0;
-           i < (sizeof(Renderer::options) / sizeof(Renderer::option)); i++) {
-        if (longopt == Renderer::options[i].longopt) {
-          shortopt = Renderer::options[i].shortopt;
-          break;
-        }
-      }
-      if (shortopt == 0) {
-        throw std::logic_error(string("Unknown option --") + longopt);
-      }
-      didlong = true;
+        olstart = olstop + 1;
+      } while (olstop != std::string::npos);
     } else {
-      /* Short option. */
-      canlong = false;
-      shortopt = options[at];
+      opts = options.substr(filestop + 1);
     }
+  }
 
-    /* Make sure the option is not specified twice. */
-    for (std::list<char>::const_iterator it = opts.begin();
-         it != opts.end(); ++it) {
-      if (*it == shortopt) {
-        throw std::logic_error(string("Option -") + shortopt +
-                               " specified twice.");
-      }
-    }
-
-    /* Parse option and handle any arguments. */
-    bool ok = false;
-    std::string argument;
-    size_t stop = at;
-    if (at != string::npos) {
-      at = options.find_first_not_of(' ', at);
-      stop = options.find(' ', at);
-      argument = options.substr(at + 1, stop - at - 1);
-    }
-    for (int i = 0;
-         i < (sizeof(Renderer::options) / sizeof(Renderer::option)); i++) {
-      if (Renderer::options[i].shortopt == shortopt) {
-        if (Renderer::options[i].argname.length() > 0) {
-          parseoption(shortopt, &argument);
-          at = stop;
-        } else {
-          parseoption(shortopt);
+  /* Read options. */
+  size_t optstop;
+  size_t optstart = 0;
+  do {
+    optstop = opts.find(',', optstart);
+    std::string opt = opts.substr(optstart, optstop - optstart);
+    if (!opt.empty()) {
+      if (opt == "n" || opt == "north") {
+        rotations.push_back(directionopt(N, "north"));
+      } else if (opt == "ne" || opt == "northeast") {
+        rotations.push_back(directionopt(NE, "northeast"));
+      } else if (opt == "e" || opt == "east") {
+        rotations.push_back(directionopt(E, "east"));
+      } else if (opt == "se" || opt == "southeast") {
+        rotations.push_back(directionopt(SE, "southeast"));
+      } else if (opt == "s" || opt == "south") {
+        rotations.push_back(directionopt(S, "south"));
+      } else if (opt == "sw" || opt == "southwest") {
+        rotations.push_back(directionopt(SW, "southwest"));
+      } else if (opt == "w" || opt == "west") {
+        rotations.push_back(directionopt(W, "west"));
+      } else if (opt == "nw" || opt == "northwest") {
+        rotations.push_back(directionopt(NW, "northwest"));
+      } else if (opt == "dimdepth") {
+        dimdepths.push_back(boolopt(true, opt));
+      } else if (opt == "litdepth") {
+        dimdepths.push_back(boolopt(false, opt));
+      } else if (opt == "oblique") {
+        obliques.push_back(boolopt(true, opt));
+      } else if (opt == "topdown") {
+        obliques.push_back(boolopt(false, opt));
+      } else if (opt == "day") {
+        lightlevels.push_back(ucharopt(255, opt));
+      } else if (opt == "night") {
+        lightlevels.push_back(ucharopt(50, opt));
+      } else if (opt == "twilight") {
+        lightlevels.push_back(ucharopt(127, opt));
+      } else if (opt.substr(0, 5) == "light") {
+        try {
+          int light = stringtoint(opt.substr(5));
+          if (light < 0 || light > 255) {
+            throw std::logic_error(string("Light level out of range: ")
+                                   + opt);
+          }
+          lightlevels.push_back(ucharopt(light, opt));
+        } catch (std::runtime_error& e) {
+          throw std::logic_error(string("Invalid light level specified: ")
+                                 + opt);
         }
-        ok = true;
-        break;
+      } else {
+        throw std::logic_error(string("Invalid renderer option: ") + opt);
       }
     }
-    if (!ok) {
-      throw std::logic_error(string("Unknown option -") + shortopt);
+
+    optstart = optstop + 1;
+  } while (optstop != std::string::npos);
+
+  /* Merge options into opts, if given. */
+  if (source) {
+    /* No rotations or obliqueness may be given. */
+    if (!rotations.empty()) {
+      throw std::logic_error("You cannot specify rotation for overlays.");
+    }
+    if (!rotations.empty()) {
+      throw std::logic_error("You cannot specify obliqueness for overlays.");
+    }
+    rotations.push_back(source->dir);
+    obliques.push_back(source->oblique);
+
+    /* No multiples allowed. */
+    if (lightlevels.size() > 1 || dimdepths.size() > 1) {
+      throw std::logic_error("You cannot specify multiples for overlays.");
     }
 
-    opts.push_back(shortopt);
-
-    if (at == string::npos) {
-      /* Done. */
-      break;
-    } else if (options[at] == ' ' || didlong) {
-      at = options.find('-', at);
-      canlong = true;
+    /* Use recipe options if none were specified. */
+    if (lightlevels.empty()) {
+      lightlevels.push_back(source->lightlevel);
     }
-  }
-
-  if (at == string::npos) {
-    options = "";
+    if (dimdepths.empty()) {
+      dimdepths.push_back(source->dimdepth);
+    }
   } else {
-    options = options.substr(at);
+    /* If any lists are empty, add defaults. */
+    if (rotations.empty())
+      rotations.push_back(directionopt(N, "north"));    // North-facing map.
+    if (lightlevels.empty())
+      lightlevels.push_back(ucharopt(127, "twilight")); // Twilight.
+    if (dimdepths.empty())
+      dimdepths.push_back(boolopt(true, "dimdepth"));   // Dim deep areas.
+    if (obliques.empty())
+      obliques.push_back(boolopt(false, "topdown"));    // Top down map.
+
+    /* If any lists have more than 1 entries, we need
+       wildcards in the filename. */
+    if ((rotations.size() > 1) &&
+        (filename.find("%r") == std::string::npos)) {
+      throw std::logic_error("Rotation multiple needs %r in filename.");
+    }
+    if ((lightlevels.size() > 1) &&
+        (filename.find("%l") == std::string::npos)) {
+      throw std::logic_error("Light level multiple needs %l in filename.");
+    }
+    if ((dimdepths.size() > 1) &&
+        (filename.find("%d") == std::string::npos)) {
+      throw std::logic_error("Depth dimming multiple needs %d in filename.");
+    }
+    if ((obliques.size() > 1) &&
+        (filename.find("%o") == std::string::npos)) {
+      throw std::logic_error("Obliqueness multiple needs %o in filename.");
+    }
   }
 
-  /* Make sure a filename was set. */
-  if (filename.empty()) {
-    throw std::logic_error("No output filename set.");
+  /* Set of outputs so far. Used to avoid duplicates. */
+  std::set<std::string> filenames;
+
+  /* Generate renderers. */
+  for (std::list<directionopt>::const_iterator rotation = rotations.begin();
+       rotation != rotations.end(); ++rotation) {
+    std::string rotfile = wildcard(filename, "%r", rotation->second);
+
+    for (std::list<ucharopt>::const_iterator lightlevel = lightlevels.begin();
+         lightlevel != lightlevels.end(); ++lightlevel) {
+      std::string lightfile = wildcard(rotfile, "%l", lightlevel->second);
+
+      for (std::list<boolopt>::const_iterator dimdepth = dimdepths.begin();
+           dimdepth != dimdepths.end(); ++dimdepth) {
+        std::string dimfile = wildcard(lightfile, "%d", dimdepth->second);
+
+        for (std::list<boolopt>::const_iterator oblique = obliques.begin();
+             oblique != obliques.end(); ++oblique) {
+          std::string obliquefile = wildcard(dimfile, "%o", oblique->second);
+
+          /* Make sure we have a unique filename for this renderer. */
+          std::pair<std::set<std::string>::iterator, bool> unique =
+            filenames.insert(obliquefile);
+          if (!unique.second) {
+            continue;
+          }
+
+          /* Make recipe struct and create renderer. */
+          const recipe target = {*rotation, *lightlevel, *dimdepth, *oblique};
+          Renderer* add = new Renderer(obliquefile, target);
+
+          /* TODO: Add overlays. */
+
+          /* Add new renderer to result list. */
+          result.push_back(add);
+        }
+      }
+    }
   }
+
+  return result;
 }
 
+/* Construct renderer. */
+Renderer::Renderer(const std::string& filename, const recipe& options)
+  : options(options), filename(filename), image(0) {
+  /* Make a local copy of the default colours. */
+  for (int i = 0; i < 256; i++) {
+    colours[i] = default_colours[i];
+  }
+}
 
 /* Release memory. */
 Renderer::~Renderer() {
@@ -143,7 +221,7 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
 
   delete image; // Just in case we are rendering more than once.
 
-  if (!oblique) {
+  if (!options.oblique.first) {
     /* Allocate memory for a flat unrotated map. We may rotate
        it when rendering is finished. */
     pvector adjust = {1, 1};
@@ -155,21 +233,19 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
 }
 
 /* Pass a chunk to the renderer and let it do its thing. */
-void Renderer::render(const Chunk& chunk,
-                      const Chunk& north, const Chunk& east,
-                      const Chunk& south, const Chunk& west) {
-  if (!oblique) {
+void Renderer::render(const chunkbox& chunks) {
+  if (!options.oblique.first) {
     /* Flat map. Render it unrotated. We may rotate it when
        all chunks are rendered. */
     for (int x = 0; x < 16; x++) {
       for (int z = 0; z < 16; z++) {
         Pixel dot;
         for (int y = 127; y >= 0; y--) {
-          Pixel under = getblock(chunk, {x, z, y}, TOP);
+          Pixel under = getblock(chunks, {x, z, y}, TOP);
           if (under.A > 0) {
-            under.light(getlight(chunk, {x, z, y}, TOP));
-            /* Adjust lighting slightly depending on height in flat mode. */
-            if (!oblique) {
+            under.light(getlight(chunks, {x, z, y}, TOP));
+            /* Adjust lighting slightly depending on height. */
+            if (options.dimdepth.first) {
               under.light(y + 128);
             }
             if (under.A > 0) {
@@ -184,8 +260,9 @@ void Renderer::render(const Chunk& chunk,
         }
 
         /* Paint new dot to map. */
-        int img_x = (bottom_left.z - chunk.get_position().z) * 16 + (15 - z);
-        int img_y = (chunk.get_position().x - top_right.x) * 16 + x;
+        int img_x = (bottom_left.z - chunks.center->get_position().z) * 16
+                    + (15 - z);
+        int img_y = (chunks.center->get_position().x - top_right.x) * 16 + x;
         (*image)(img_x, img_y) = dot;
       }
     }
@@ -195,12 +272,20 @@ void Renderer::render(const Chunk& chunk,
   }
 }
 
+/* Make any last minute adjustments. */
+void Renderer::finalise() {
+  if (options.oblique.first) {
+    /* TODO: Finalise oblique images. */
+  }
+  /* TODO: Write overlays. */
+}
+
 /* Finalise and save image. */
 void Renderer::save() {
-  /* TODO: Finalise. */
+  finalise();
   if (image) {
     int angle;
-    switch (up) {
+    switch (options.dir.first) {
     case N: angle = 0; break;
     case NE: angle = 7; break;
     case E: angle = 6; break;
@@ -219,87 +304,20 @@ void Renderer::save() {
   }
 }
 
-/* Parse an option. */
-void Renderer::parseoption(char shortopt, std::string* argument) {
-  switch (shortopt) {
-  case 'l': {
-    /* Daylight percentage. */
-    if (*argument == "day" || *argument == "Day" || *argument == "DAY") {
-      skylight = 255;
-    } else if (*argument == "night" || *argument == "Night" ||
-               *argument == "NIGHT") {
-      skylight = 51;
-    } else if (*argument == "twilight" || *argument == "Twilight"
-               || *argument == "TWILIGHT") {
-      skylight = 127;
-    } else {
-      try {
-        int light = stringtoint(*argument);
-        if (light < 0 || light > 100) {
-          throw std::runtime_error("Argument to -l must be "
-                                   "between 0 and 100.");
-        }
-
-        skylight = (255 * light) / 100;
-      } catch (std::runtime_error& e) {
-        throw std::runtime_error("Invalid argument to -l.");
-      }
-    }
-  } break;
-
-  case 'o': {
-    /* Oblique mode. */
-    oblique = true;
-  } break;
-
-  case 'O': {
-    /* Output file name. */
-    filename = *argument;
-  } break;
-
-  case 'r': {
-    /* Rotate. */
-    int upint = -1;
-    try {
-      upint = stringtoint(*argument);
-    } catch (std::runtime_error& e) {}
-
-    if (*argument == "N" || *argument == "n" || upint == 0) {
-      up = N;
-    } else if (*argument == "NE" || *argument == "ne" || upint == 7) {
-      up = NE;
-    } else if (*argument == "E" || *argument == "e" || upint == 6) {
-      up = E;
-    } else if (*argument == "SE" || *argument == "se" || upint == 5) {
-      up = SE;
-    } else if (*argument == "S" || *argument == "s" || upint == 4) {
-      up = S;
-    } else if (*argument == "SW" || *argument == "sw" || upint == 3) {
-      up = SW;
-    } else if (*argument == "W" || *argument == "w" || upint == 2) {
-      up = W;
-    } else if (*argument == "NW" || *argument == "nw" || upint == 1) {
-      up = NW;
-    } else {
-      throw std::runtime_error("Invalid argument to -r.");
-    }
-  } break;
-
-  default:
-    throw std::runtime_error(string("Unable to handle option -") + shortopt);
-  }
-}
-
 /* Get colour value of a block. */
-Pixel Renderer::getblock(const Chunk& chunk, const pvector& pos,
+Pixel Renderer::getblock(const chunkbox& chunks, pvector pos,
                          direction dir) {
-  unsigned char type = chunk.blocks(pos);
+  /* Get a proper target. */
+  Chunk* target = fixpvector(chunks, pos);
+
+  /* Fetch block from target. */
+  unsigned char type = target->blocks(pos);
   Pixel result = (dir & TOP) ? colours[type].top : colours[type].side;
 
   if ((type == 0x08 || type == 0x09) && (dir & TOP)) {
     /* Block is water. Set top alpha based on depth. */
     try {
-      unsigned char invdepth = chunk.data(pos);
+      unsigned char invdepth = target->data(pos);
       if (invdepth > 0) {
         result.A = 0xff - invdepth * 0x0f;
       }
@@ -310,40 +328,40 @@ Pixel Renderer::getblock(const Chunk& chunk, const pvector& pos,
 }
 
 /* Get lighting level of a block. */
-unsigned char Renderer::getlight(const Chunk& chunk, const pvector& pos,
+unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
                                  direction dir) {
-  pvector source = pos;
   if (dir & TOP) {
-    source.y++;
+    pos.y++;
   } else if (dir & N) {
-    source.x--;
+    pos.x--;
   } else if (dir & E) {
-    source.z--;
+    pos.z--;
   } else if (dir & S) {
-    source.x++;
+    pos.x++;
   } else if (dir & W) {
-    source.z++;
+    pos.z++;
   }
 
   unsigned char l_sky = 0;
   unsigned char l_block = 0;
 
-  if (source.y > 127 || source.y < 0) {
+  if (pos.y > 127 || pos.y < 0) {
     /* There is no lighting data above or below the map. */
-    l_sky = 255;
-    l_block = 0;
-  } else if (source.x < 0 || source.x > 15 || source.z < 0 || source.z > 15) {
-    /* Lighting data is in another chunk. */
-    /* TODO */
+    l_sky = 255; // Fully lit by sky.
+    l_block = 0; // Not lit by other sources.
+
   } else {
+    /* Get a proper target. */
+    Chunk* target = fixpvector(chunks, pos);
+
     try {
-      l_sky = chunk.skylight(source) * 17;
+      l_sky = target->skylight(pos) * 17;
     } catch (std::runtime_error& e) {
       /* Skylight data not loaded. */
       l_sky = 0;
     }
     try {
-      l_block = chunk.blocklight(source) * 17;
+      l_block = target->blocklight(pos) * 17;
     } catch (std::runtime_error& e) {
       /* Blocklight data not loaded. */
       l_block = 0;
@@ -351,8 +369,44 @@ unsigned char Renderer::getlight(const Chunk& chunk, const pvector& pos,
   }
 
   /* Balance lighting. */
-  return ((l_sky * skylight) / 255) + ((l_block * (255 - skylight)) / 255);
+  return ((l_sky * options.lightlevel.first) / 255) +
+    ((l_block * (255 - options.lightlevel.first)) / 255);
 }
+
+/* Convert a chunkbox-pvector combo to a chunk-pvector combo. The pvector
+   passed in may point outside the center chunk. */
+Chunk* Renderer::fixpvector(const chunkbox& chunks, pvector& pos) {
+  Chunk* target = chunks.center;
+
+  /* Make sure height is valid. */
+  if (pos.y < 0 || pos.y > 127) {
+    throw std::logic_error("Trying to read data outside of valid height.");
+  }
+
+  /* Check if block is in a neighbouring chunk. */
+  if (pos.z > 15) {
+    target = chunks.west;
+    pos.z -= 16;
+  } else if (pos.z < 0) {
+    target = chunks.east;
+    pos.z += 16;
+  } else if (pos.x > 15) {
+    target = chunks.south;
+    pos.x -= 16;
+  } else if (pos.x < 0) {
+    target = chunks.north;
+    pos.x += 16;
+  }
+
+  /* If target is unset or position is invalid,
+     target is not in the chunkbox. */
+  if (!target || pos.x > 15 || pos.x < 0 || pos.z > 15 || pos.z < 0) {
+    throw std::range_error("Attempting to read data from nonexisting chunk.");
+  }
+
+  return target;
+}
+
 
 /* Set the alpha channel of certain block types. */
 void Renderer::set_default_alpha(std::vector<unsigned char>& types,
@@ -426,15 +480,16 @@ void Renderer::set_alpha(std::vector<unsigned char>& types,
   }
 }
 
-/* Define renderer arguments. */
-const Renderer::option Renderer::options[] = {
-  {'l', "light", "n",
-   "The percentage of daylight to render. 20 gives a good\n"
-   "night view. May also be one of day, night, twilight.", "50"},
-  {'r', "rotate", "n",
-   "Rotate the map n*45 degrees in a clockwise direction.\n"
-   "You may also specify one of N, NE, E, SE, S, SW, W, NW.", "N"},
-  {'o', "oblique", "", "Not yet implemented."},
-  {'O', "output", "filename",
-   "Output filename, typically specified with a .png suffix."}
-};
+/* Wildcard replacement for file names. */
+std::string Renderer::wildcard(const std::string& filename,
+                               const std::string& wildcard,
+                               const std::string& replacement) {
+    std::string result = filename;
+    size_t cardpos;
+
+    while ((cardpos = result.find(wildcard)) != std::string::npos) {
+      result.replace(cardpos, 2, replacement, 0, replacement.length());
+    };
+
+    return result;
+}

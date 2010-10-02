@@ -1,89 +1,103 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <list>
 #include <cstdlib>
 
 #include <stdexcept>
 
+#include "version.h"
+
 #include "level.hpp"
 #include "renderer.hpp"
+#include "render_contour.hpp"
 #include "image.hpp"
 #include "intstring.hpp"
+#include "options.hpp"
 
 using std::cout;
 using std::cerr;
 using std::string;
-
-/*
- * Output usage help.
- */
-void usage(const char* binary) {
-  cerr << "Usage:\t" << binary << " <world> [options]\n\n"
-       << "Options:\n";
-
-  for (int i = 0; i < (sizeof(Renderer::options) / sizeof(Renderer::option));
-       i++) {
-    const Renderer::option o = Renderer::options[i];
-    const string arg = (o.argname.length()) ? "<" + o.argname + ">" : "";
-    cerr << " -" << o.shortopt << arg << " | --" << o.longopt;
-    if (arg.length())
-      cerr << "=" << arg;
-    if (o.defaultval.length())
-      cerr << "  (default " << o.defaultval << ")";
-    cerr << "\n" << o.description << "\n\n";
-  }
-
-  cerr << "Multiple outputs:\n"
-       << " By separating groups of options using --, you may render several\n"
-       << "maps in one run. You may only render one world per run.\n";
-}
+using std::list;
 
 /*
  * Main function. Interpret arguments and get started.
  */
 int main(int argc, char** argv) {
-  /* Initialise a variable to hold the path to the world. */
+  /* Print usage on empty argument list. */
+  if (argc == 1) {
+    usage(argv[0]);
+    return 0;
+  }
+
+  /* A variable to hold the path to the world. */
   string worldpath;
 
-  /* A string to hold options for the renderers. */
-  string options;
+  /* Verbosity flag. */
+  bool verbose = false;
 
-  /* Interpret arguments. */
-  for (int i = 1; i < argc; i++) {
-    /* Choose what to do depending on first character. */
-    switch (argv[i][0]) {
-    case 0:   // Empty argument.
-      continue;
+  /* Strings to hold options for the renderers. */
+  list<string> renderstrs;
 
-    case '-': // An option.
-      options += string(" ") + argv[i];
-      break;
+  /* Global options. */
+  list<longopt> options;
 
-    default:  // World path or number.
+  /* Get options and their arguments. */
+  try {
+    parse_options(argc, argv, renderstrs, options);
+  } catch (std::exception& e) {
+    cerr << e.what() << "\n";
+    return 1;
+  }
+
+  /* Handle the options. */
+  for (list<longopt>::const_iterator opt = options.begin();
+       opt != options.end(); ++opt) {
+    if (opt->first == "number"){
+      /* Set the world path by world number. */
+
+      /* Make sure it's not already set. */
       if (!worldpath.empty()) {
-        /* World path is already set. */
-        cerr << "Error: Can't render two worlds at once. "
-                "Please check your syntax.\n";
+        cerr << "Cannot render two maps at once. Check your arguments.\n";
         return 1;
       }
 
-      /* Convert number to path if necessary. */
+      /* Make sure argument is valid. */
       try {
-        int worldno = stringtoint(argv[i]);
+        int worldno = stringtoint(opt->second);
+      } catch (std::runtime_error& e) {
+        cerr << "Invalid world number: " << opt->second << "\n";
+        return 1;
+      }
 
-        /* Argument is a number. */
+      /* Get path. */
 #ifdef __unix__
-        worldpath = getenv("HOME");
-        worldpath += "/";
+      worldpath = getenv("HOME");
+      worldpath += "/";
 #else
 #warning "TODO:Specifying world number only works on *NIX platforms (for now)."
 #endif
-        worldpath += ".minecraft/saves/World";
-        worldpath += argv[i];
-      } catch (std::runtime_error& e) {
-        /* Argument is a path. */
-        worldpath = argv[i];
+      worldpath += ".minecraft/saves/World";
+      worldpath += opt->second;
+
+    } else if (opt->first == "path") {
+      /* Set the world path directly. */
+
+      /* Make sure it's not already set. */
+      if (!worldpath.empty()) {
+        cerr << "Cannot render two maps at once. Check your arguments.\n";
+        return 1;
       }
+
+      worldpath = opt->second;
+
+    } else if (opt->first == "version") {
+      /* Print version information and exit. */
+      cerr << APPNAME << " " << APPVERSION << "\n";
+      return 0;
+
+    } else if (opt->first == "verbose") {
+      verbose = true;
     }
   }
 
@@ -93,19 +107,26 @@ int main(int argc, char** argv) {
     if (argc > 1) cerr << "Error: No world specified.\n";
 
     usage(argv[0]);
-    if (argc > 1) return 1;;
+    return 1;;
+  }
 
-    return 0;
+  /* Generate the requested renderers. */
+  Renderer::RenderList renderers;
+  for (list<string>::iterator str = renderstrs.begin();
+       str != renderstrs.end(); ++ str) {
+    renderers.splice(renderers.begin(), Renderer::make_renderers(*str));
+  }
+
+  /* Make sure there is at least one renderer.*/
+  if (renderers.size() == 0) {
+    cerr << "No outputs specified.\n";
+    return 1;
   }
 
   /* Prepare the level (create chunk map). */
   Level level(worldpath);
 
-  /* Render the level to memory. */
-  std::list<Renderer*> renderers;
-  while (!options.empty()) {
-    renderers.push_back(new Renderer(options));
-  }
+  /* Render to memory. */
   level.render(renderers);
 
   /* Output the result. */

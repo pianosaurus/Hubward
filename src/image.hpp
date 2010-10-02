@@ -34,6 +34,9 @@ public:
   /* Get image dimensions. */
   ivector dimensions() const { return size; };
 
+  /* Colour replace. */
+  void colour_replace(const Pixel& from, const Pixel& to);
+
   /* Return a pixel. */
   Pixel& operator()(int x, int y);
   Pixel  operator()(int x, int y) const;
