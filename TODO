@@ -9,17 +9,15 @@ NBT class: Add seek functions, and set up renderers to report their
 
 intstring: Put base36 conversions here.
 
-Renderer: Find out what is wrong with the chunk boundaries. See
-  boxy output of contour.
-
 
 
 Planned features:
-  Oblique mode is well underway in Pianosaurus's private repo.
+  Ordinal oblique mode is well underway in Pianosaurus's private repo.
   Location-based annotations to worlds.
   Sign-based annotations.
   Qt GUI.
   Windows installer based on NSIS.
+  Statistics (CSV-format).
   Save some PNG metadata:
     Annotated locations
     Image coordinates of position 0,0
@@ -30,3 +28,9 @@ Planned features:
     Outline (where occlusion starts).
     Tree symbols.
     Parchment background.
+    Read from PNG files (for compass roses, etc.)
+    Grid (customisable z, x and y size and offset)
+  Support for isopleth overlays.
+  Contour overlay:
+    Add customisable delta.
+    Add customisable colour gradient in the y direction.

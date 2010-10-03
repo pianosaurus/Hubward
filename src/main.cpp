@@ -39,6 +39,9 @@ int main(int argc, char** argv) {
   /* Global options. */
   list<longopt> options;
 
+  /* Chunk intersect list. */
+  list<Level::position> chunks;
+
   /* Get options and their arguments. */
   try {
     parse_options(argc, argv, renderstrs, options);
@@ -98,6 +101,66 @@ int main(int argc, char** argv) {
 
     } else if (opt->first == "debug") {
       set_debug(true);
+      set_verbose(true); // Debug implies verbose.
+
+    } else if (opt->first == "chunks") {
+      string error = "Invalid dimensions. Use WxH or WxH+Z+X, where\n"
+                     "  W is east-west count\n  H is north-south count\n"
+                     "  Z is west offset\n  X is south offset\n"
+                     "You may also use - instead of + for negative Z and X. If"
+                     " you leave out the\noffset, center will be at 0,0.";
+      int width, height, west, south;
+
+      size_t dX = opt->second.find_first_of("xX");
+      if (dX == string::npos) {
+        cerr << error << std::endl;
+        return 1;
+      }
+      try {
+        width = stringtoint(opt->second.substr(0, dX));
+      } catch (std::runtime_error& e) {
+        cerr << "Invalid width: " << e.what() << std::endl;
+        return 1;
+      }
+
+      size_t do1 = opt->second.find_first_of("+-");
+      if (do1 == string::npos) {
+        try {
+          height = stringtoint(opt->second.substr(dX + 1));
+        } catch (std::runtime_error& e) {
+          cerr << "Invalid height: " << e.what() << std::endl;
+          return 1;
+        }
+        west = -width/2;
+        south = -height/2;
+      } else {
+        try {
+          height = stringtoint(opt->second.substr(dX + 1, do1 - dX - 1));
+        } catch (std::runtime_error& e) {
+          cerr << "Invalid height: " << e.what() << std::endl;
+          return 1;
+        }
+        size_t do2 = opt->second.find_first_of("+-", do1 + 1);
+        try {
+          if (do2 == string::npos) {
+            west = stringtoint(opt->second.substr(do1));
+            south = -height/2;
+          } else {
+            west = stringtoint(opt->second.substr(do1, do2 - do1));
+            south = stringtoint(opt->second.substr(do2));
+          }
+        } catch (std::runtime_error& e) {
+          cerr << "Invalid offset: " << e.what() << std::endl;
+          return 1;
+        }
+      }
+
+      /* Add to intersect list. */
+      for (int xx = 0; xx < width; xx++) {
+        for (int zz = 0; zz < height; zz++) {
+          chunks.push_back({xx + west, zz + south});
+        }
+      }
     }
   }
 
@@ -125,17 +188,26 @@ int main(int argc, char** argv) {
 
   /* Prepare the level (create chunk map). */
   verbose << "Finding files in " << worldpath << std::endl;
-  Level level(worldpath);
+  Level* level;
+  if (chunks.empty()) {
+    level = new Level(worldpath);
+  } else {
+    level = new Level(worldpath, chunks);
+  }
 
   /* Render to memory. */
   verbose << "Rendering..." << std::endl;
-  level.render(renderers);
+  level->render(renderers);
 
   /* Output the result. */
   verbose << "Finished reading. Writing images to disk." << std::endl;
   Renderer::RenderList::iterator renderer = renderers.begin();
   while (!renderers.empty()) {
-    (*renderer)->save();
+    try {
+      (*renderer)->save();
+    } catch (std::exception& e) {
+      std::cerr << "Failed to save rendering: " << e.what() << std::endl;
+    }
 
     /* Delete the renderer, just to be nice. */
     delete *renderer;
@@ -143,6 +215,7 @@ int main(int argc, char** argv) {
   }
 
   /* Finished. */
+  delete level;
   std::cerr << "Done." << std::endl;
   return 0;
 }

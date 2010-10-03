@@ -29,16 +29,17 @@ public:
   enum direction {
     TOP = 1,
     N = 2,
-    NE = 6,
     E = 4,
-    SE = 12,
     S = 8,
-    SW = 24,
     W = 16,
-    NW = 18,
-    BOTTOM = 32,
-    SIDES = 30,
-    ALL = 63
+    NE = 32,
+    SE = 64,
+    SW = 128,
+    NW = 256,
+    BOTTOM = 512,
+    CARDINAL = N + E + S + W,
+    ORDINAL = NE + SE + SW + NW,
+    ALL = CARDINAL + ORDINAL + TOP + BOTTOM
   };
 
   /* Possible overlays. */
@@ -80,7 +81,7 @@ public:
                    const Level::position& bottom_left_chunk);
 
   /* Pass a chunk to the renderer and let it do its thing. */
-  virtual void render(const chunkbox& chunks);
+  void render(const chunkbox& chunks);
 
   /* Make any last minute adjustments. */
   virtual void finalise();
@@ -129,13 +130,21 @@ protected:
   /* Is the renderer finalised? */
   bool finalised;
 
-  /* Get colour value of a block. */
+  /* Get unlit colour value of a block. */
   virtual Pixel getblock(const chunkbox& chunks, pvector pos,
                          direction dir);
 
   /* Get lighting value of a block. */
   virtual unsigned char getlight(const chunkbox& chunks, pvector pos,
                                  direction dir);
+
+  /* Get a block, light it and blend behind a pixel. Return true if
+     the block was lit.  */
+  virtual bool blendblock(const chunkbox& chunks, pvector pos,
+                          direction dir, Pixel& top);
+
+  /* Negate a cardinal or ordinal direction. */
+  static direction negate_direction(direction direction);
 
   /* Convert a chunkbox-pvector combo to a chunk-pvector combo. The pvector
      passed in may point outside the center chunk. */

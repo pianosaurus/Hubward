@@ -40,8 +40,8 @@ Pixel Render_Contour::getblock(const chunkbox& chunks, pvector pos,
     return {0, 0, 0, 0};
   }
 
-  /* Tops are black if divisible by 5. */
-  if ((dir & TOP) && (pos.y % 5 == 0)) { // TODO: Offset for shoreline.
+  /* Tops are black if divisible by 5 (offset for default shoreline). */
+  if ((dir & TOP) && (pos.y % 5 == 3)) {
     /* But only if there is a neighbouring transparent block. */
     bool air = false;
     try {

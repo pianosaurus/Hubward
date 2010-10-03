@@ -1,7 +1,5 @@
 #include "options.hpp"
 
-#include "version.h"
-
 #include <iostream>
 #include <stdexcept>
 
@@ -18,6 +16,8 @@ const struct option {
   string description;
 } valid_options[] = {
   { 0, "debug", false, "", "Enable debugging output."},
+  { 'c', "chunks", true, "dimensions", "Only render the chunks specified by "
+                                       "dimensions (WxH or WxH+Z+X)." },
   { 'n', "number", true, "n", "The world number to render. This or -p must "
                               "be specified."},
   { 'p', "path", true, "path", "The path of the world to render. This or -n "
@@ -30,7 +30,6 @@ const struct option {
  * Output usage help.
  */
 void usage(const char* binary) {
-  cerr << APPNAME << " " << APPVERSION << "\n";
   cerr << "Usage:\t" << binary << " <options> <renderspec1> [renderspec2 [...]]\n\n"
        << "Options:\n";
 
@@ -57,15 +56,16 @@ void usage(const char* binary) {
   cerr << "\nRenderspecs:\n"
        << "\t<filename>[:keywords[:overlay1[:overlay2[...]]]\n\n";
   cerr << "  Rotation keywords [%r]: (defaults to <north>)\n"
-       << "\t<n, nw, w, sw, s, se, e, ne> or the equivalent <north northwest\n"
-       << "\twest, southwest, south, southeast, east, northeast>.\n";
+       << "\t<n, nw, w, sw, s, se, e, ne> or the equivalent <north,\n"
+       << "\tnorthwest, west, southwest, south, southeast, east, northeast>.\n"
+       << "\tYou may also use <cardinal, ordinal>; see Multiples below.\n";
   cerr << "  Lighting keywords [%l]: (defaults to <twilight>)\n"
        << "\t<day, night, twilight, lightNNN>, where NNN is a number\n"
        << "\tbetween 0 and 255 inclusive.\n";
-  cerr << "  Depth dimming keywords [%d]: (defaults to <dimdepth)\n"
+  cerr << "  Depth dimming keywords [%d]: (defaults to <dimdepth>)\n"
        << "\t<dimdepth, litdepth>. Use dimdepth to adjust brightness of\n"
        << "\tthe surface depending on height. This will enable you to see\n"
-       << "\theight features on top-down maps.\n";
+       << "\theight features on top-down maps without contour lines.\n";
   cerr << "  Special keywords: (defaults to nothing)\n"
        << "\t<contour> draws contour lines on a transparent background.\n";
   cerr << "\n  Overlays can be added with all the same keywords except\n"
@@ -74,7 +74,7 @@ void usage(const char* binary) {
 
   /* Describe multiples. */
   cerr << "\nMultiples:\n"
-       << "  You may specify multiple keywords in any of the keyword groups\n"
+       << "  You may specify multiple keywords in most of the keyword groups\n"
        << "  above to render several maps at once. You must also add the\n"
        << "  %-marker in the square brackets of that group to the file name.\n"
        << "  This marker will be replaced with the keyword being rendered.\n";

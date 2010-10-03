@@ -1,3 +1,4 @@
+#include "output.hpp"
 #include "renderer.hpp"
 #include "chunk.hpp"
 #include "image.hpp"
@@ -87,6 +88,16 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
       } else if (opt == "w" || opt == "west") {
         rotations.push_back(directionopt(W, "west"));
       } else if (opt == "nw" || opt == "northwest") {
+        rotations.push_back(directionopt(NW, "northwest"));
+      } else if (opt == "cardinal") {
+        rotations.push_back(directionopt(N, "north"));
+        rotations.push_back(directionopt(E, "east"));
+        rotations.push_back(directionopt(S, "south"));
+        rotations.push_back(directionopt(W, "west"));
+      } else if (opt == "ordinal") {
+        rotations.push_back(directionopt(NE, "northeast"));
+        rotations.push_back(directionopt(SE, "southeast"));
+        rotations.push_back(directionopt(SW, "southwest"));
         rotations.push_back(directionopt(NW, "northwest"));
       } else if (opt == "dimdepth") {
         dimdepths.push_back(boolopt(true, opt));
@@ -201,6 +212,8 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
           std::pair<std::set<std::string>::iterator, bool> unique =
             filenames.insert(obliquefile);
           if (!unique.second) {
+            debug << "Duplicate file name. Skipping " << obliquefile
+                  << std::endl;
             continue;
           }
 
@@ -215,7 +228,7 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
             add = new Renderer(obliquefile, target);
             break;
           case CONTOUR:
-            add = new Render_Contour("", target);
+            add = new Render_Contour(obliquefile, target);
             break;
           }
 
@@ -262,6 +275,8 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
                            const Level::position& bottom_left_chunk) {
   top_right = { top_right_chunk.second, top_right_chunk.first, 0 };
   bottom_left = { bottom_left_chunk.second, bottom_left_chunk.first, 0 };
+  pvector adjust = {1, 1};
+  pvector size = ((bottom_left - top_right) + adjust) * 16;
 
   /* Make sure we only do this once. */
   if (image)
@@ -270,11 +285,25 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
   if (!options.oblique.first) {
     /* Allocate memory for a flat unrotated map. We may rotate
        it when rendering is finished. */
-    pvector adjust = {1, 1};
-    pvector size = ((bottom_left - top_right) + adjust) * 16;
     image = new Image({size.z, size.x});
   } else {
-    /* TODO: Calculate size of oblique map. */
+    /* Calculate size of oblique map. */
+    if (options.dir.first & CARDINAL) {
+      if (options.dir.first & (N | S)) {
+        /* North or south facing map. */
+        image = new Image({size.z, size.x + 128});
+      } else {
+        /* East or west facing map. */
+        image = new Image({size.x, size.z + 128});
+      }
+    } else if (options.dir.first & ORDINAL) {
+      /* TODO: Calculate size of ordinal oblique map. */
+      throw std::logic_error("This alpha release cannot render "
+                             "ordinal oblique maps yet.");
+    } else {
+      /* Oblique TOP or BOTTOM is not possible. */
+      throw std::runtime_error("Invalid oblique direction for allocation.");
+    }
   }
 
   /* Allocate for all overlays too. */
@@ -293,21 +322,10 @@ void Renderer::render(const chunkbox& chunks) {
       for (int z = 0; z < 16; z++) {
         Pixel dot;
         for (int y = 127; y >= 0; y--) {
-          Pixel under = getblock(chunks, {x, z, y}, TOP);
-          if (under.A > 0) {
-            under.light(getlight(chunks, {x, z, y}, TOP));
-            /* Adjust lighting slightly depending on height. */
-            if (options.dimdepth.first) {
-              under.light(y + 128);
-            }
-            if (under.A > 0) {
-              dot.blend_under(under);
-              if (dot.A > 0xf0) {
-                /* If pixel is almost opaque, we're close enough. */
-                dot.A = 0xff;
-                break;
-              }
-            }
+          blendblock(chunks, {x, z, y}, TOP, dot);
+          if (dot.A == 0xff) {
+            /* Done with this pixel. */
+            break;
           }
         }
 
@@ -320,7 +338,135 @@ void Renderer::render(const chunkbox& chunks) {
     }
   } else {
     /* Oblique map. */
-    /* TODO */
+    if (options.dir.first & CARDINAL) {
+      /* Facing a cardinal direction. */
+      bool front_to_back = options.dir.first & (N | E);
+
+      /* Calculate image coordinate offset of chunk. */
+      int off_x, off_y;
+      switch (options.dir.first) {
+      case N:
+        /* Facing north. */
+        off_x = (bottom_left.z - chunks.center->get_position().z) * 16;
+        off_y = (chunks.center->get_position().x - top_right.x) * 16
+          + 127 + 16;
+        break;
+
+      case E:
+        /* Facing east. */
+        off_x = (chunks.center->get_position().x - top_right.x) * 16;
+        off_y = (chunks.center->get_position().z - top_right.z) * 16
+          + 127 + 16;
+        break;
+
+      case S:
+        /* Facing south. */
+        off_x = (chunks.center->get_position().z - top_right.z) * 16;
+        off_y = (bottom_left.x - chunks.center->get_position().x) * 16
+          + 127 + 16;
+        break;
+
+      case W:
+        /* Facing west. */
+        off_x = (bottom_left.x - chunks.center->get_position().x) * 16;
+        off_y = (bottom_left.z - chunks.center->get_position().z) * 16
+          + 127 + 16;
+        break;
+      }
+
+      for (int w = 0; w < 16; w++) {
+        for (int y = 16 + 127; y >= 0; y--) {
+          /* Calculate image coordinates. */
+          int img_y = off_y - y;
+          int img_x = off_x + w;
+
+          /* Get initial pixel colour. */
+          Pixel dot(0,0,0,0);
+          if (front_to_back) {
+            dot = (*image)(img_x, img_y);
+            if (dot.A == 0xff) {
+              /* Pixel is already finished. */
+              continue;
+            }
+          }
+
+          /* Start of raycast. */
+          int depth = 0;
+          int ystep = y;
+          direction step = negate_direction(options.dir.first);
+
+          /* If y is more than 127, we are looking at the top of the chunk. */
+          if (y > 127) {
+            step = TOP;
+            ystep = 127;
+            depth = y - 128;
+          }
+
+          /* Raycast back and down. */
+          while (ystep >= 0 && depth < 16) {
+            /* Convert depth and height to position inside chunk. */
+            pvector pos(0, 0, ystep);
+            switch (options.dir.first) {
+            case N:
+              /* Facing north. */
+              pos.x = 15 - depth;
+              pos.z = 15 - w;
+              break;
+
+            case E:
+              /* Facing east. */
+              pos.x = w;
+              pos.z = 15 - depth;
+              break;
+
+            case S:
+              /* Facing south. */
+              pos.x = depth;
+              pos.z = w;
+              break;
+
+            case W:
+              /* Facing west. */
+              pos.x = 15 - w;
+              pos.z = depth;
+              break;
+            }
+
+            /* Blend the current block onto the pixel. */
+            blendblock(chunks, pos, step, dot);
+            if (dot.A == 0xff) {
+              /* Done with this pixel. */
+              break;
+            }
+
+            /* Step to the block behind this one (in staircase steps). */
+            if (step & CARDINAL) {
+              /* We just got the side of a block. The pixel behind is
+                 the top of the block below. */
+              step = TOP;
+              ystep--;
+            } else {
+              /* We just got the top of a block. The pixel behind is
+                 the side of the block behind. */
+              step = negate_direction(options.dir.first);
+              depth++;
+            }
+          }
+
+          /* Paint new dot to map. */
+          if (front_to_back) {
+            (*image)(img_x, img_y) = dot;
+          } else {
+            (*image)(img_x, img_y).blend_over(dot);
+          }
+        }
+      }
+
+    } else if (options.dir.first & ORDINAL) {
+      /* TODO: Render oblique images. */
+    } else {
+      throw std::runtime_error("Invalid render direction.");
+    }
   }
 
   /* Render all overlays too. */
@@ -332,8 +478,28 @@ void Renderer::render(const chunkbox& chunks) {
 
 /* Make any last minute adjustments. */
 void Renderer::finalise() {
-  if (options.oblique.first) {
-    /* TODO: Finalise oblique images. */
+  if (!image) {
+    throw std::logic_error("Finalising failed: No image.");
+  }
+
+  if (!options.oblique.first) {
+    /* Top-down images must be rotated. */
+    int angle;
+    switch (options.dir.first) {
+    case N: angle = 0; break;
+    case NE: angle = 7; break;
+    case E: angle = 6; break;
+    case SE: angle = 5; break;
+    case S: angle = 4; break;
+    case SW: angle = 3; break;
+    case W: angle = 2; break;
+    case NW: angle = 1; break;
+    default:
+      throw std::logic_error("Invalid rotation of image.");
+    }
+    Image* rotate = new Image(*image, angle);
+    delete image;
+    image = rotate;
   }
 
   /* Blend overlays. */
@@ -350,25 +516,11 @@ void Renderer::finalise() {
 /* Finalise and save image. */
 void Renderer::save() {
   finalise();
-  if (image) {
-    int angle;
-    switch (options.dir.first) {
-    case N: angle = 0; break;
-    case NE: angle = 7; break;
-    case E: angle = 6; break;
-    case SE: angle = 5; break;
-    case S: angle = 4; break;
-    case SW: angle = 3; break;
-    case W: angle = 2; break;
-    case NW: angle = 1; break;
-    default:
-      throw std::logic_error("Invalid rotation of image.");
-    }
-    Image rotate(*image, angle);
-    rotate.output(filename, angle % 2); // Trim on diagonals.
-  } else {
-    throw std::logic_error("Attempted to save unrendered image.");
-  }
+
+  /* Trim on ordinal rotations and all oblique angles. */
+  bool trim = options.oblique.first || (options.dir.first & ORDINAL);
+
+  image->output(filename, trim);
 }
 
 /* Get colour value of a block. */
@@ -381,8 +533,8 @@ Pixel Renderer::getblock(const chunkbox& chunks, pvector pos,
   unsigned char type = target->blocks(pos);
   Pixel result = (dir & TOP) ? colours[type].top : colours[type].side;
 
-  if ((type == 0x08 || type == 0x09) && (dir & TOP)) {
-    /* Block is water. Set top alpha based on depth. */
+  if (type == 0x08 || type == 0x09) {
+    /* Block is water. Set alpha based on depth. */
     try {
       unsigned char invdepth = target->data(pos);
       if (invdepth > 0) {
@@ -397,16 +549,20 @@ Pixel Renderer::getblock(const chunkbox& chunks, pvector pos,
 /* Get lighting level of a block. */
 unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
                                  direction dir) {
-  if (dir & TOP) {
+  if (dir == TOP) {
     pos.y++;
-  } else if (dir & N) {
+  } else if (dir == N) {
     pos.x--;
-  } else if (dir & E) {
+  } else if (dir == E) {
     pos.z--;
-  } else if (dir & S) {
+  } else if (dir == S) {
     pos.x++;
-  } else if (dir & W) {
+  } else if (dir == W) {
     pos.z++;
+  } else if (dir == BOTTOM) {
+    pos.y--;
+  } else {
+    throw std::runtime_error("Cannot get lighting of diagonal block.");
   }
 
   unsigned char l_sky = 0;
@@ -419,25 +575,70 @@ unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
 
   } else {
     /* Get a proper target. */
-    Chunk* target = fixpvector(chunks, pos);
-
+    Chunk* target = 0;
     try {
-      l_sky = target->skylight(pos) * 17;
-    } catch (std::runtime_error& e) {
-      /* Skylight data not loaded. */
-      l_sky = 0;
+      target = fixpvector(chunks, pos);
+    } catch (std::range_error& e) {
+      /* Chunk is not loaded. */
     }
-    try {
-      l_block = target->blocklight(pos) * 17;
-    } catch (std::runtime_error& e) {
-      /* Blocklight data not loaded. */
-      l_block = 0;
+
+    if (target) {
+      try {
+        l_sky = target->skylight(pos) * 17;
+      } catch (std::runtime_error& e) {
+        /* Skylight data not loaded. */
+      }
+      try {
+        l_block = target->blocklight(pos) * 17;
+      } catch (std::runtime_error& e) {
+        /* Blocklight data not loaded. */
+      }
     }
   }
 
   /* Balance lighting. */
   return ((l_sky * options.lightlevel.first) / 255) +
     ((l_block * (255 - options.lightlevel.first)) / 255);
+}
+
+/* Get a block, light it and blend behind a pixel. Return true if the
+   block was lit.  */
+bool Renderer::blendblock(const chunkbox& chunks, pvector pos,
+                          direction dir, Pixel& top) {
+  Pixel under = getblock(chunks, pos, dir);
+  if (under.A > 0) {
+    unsigned char light = getlight(chunks, pos, dir);
+    under.light(light);
+    /* Adjust lighting slightly depending on height. */
+    if (options.dimdepth.first) {
+      under.light(pos.y + 128);
+    }
+    if (under.A > 0) {
+      top.blend_under(under);
+    }
+
+    return light;
+  }
+
+  return true;
+}
+
+/* Negate a cardinal or ordinal direction. */
+Renderer::direction Renderer::negate_direction(direction direction) {
+  switch (direction) {
+  case N:  return S;
+  case NE: return SW;
+  case E:  return W;
+  case SE: return NW;
+  case S:  return N;
+  case SW: return NE;
+  case W:  return E;
+  case NW: return SE;
+  case TOP:    return BOTTOM;
+  case BOTTOM: return TOP;
+  default:
+    throw std::logic_error("Cannot negate compound direction.");
+  }
 }
 
 /* Convert a chunkbox-pvector combo to a chunk-pvector combo. The pvector
@@ -465,9 +666,12 @@ Chunk* Renderer::fixpvector(const chunkbox& chunks, pvector& pos) {
     pos.x += 16;
   }
 
-  /* If target is unset or position is invalid,
-     target is not in the chunkbox. */
-  if (!target || pos.x > 15 || pos.x < 0 || pos.z > 15 || pos.z < 0) {
+  if (pos.x > 15 || pos.x < 0 || pos.z > 15 || pos.z < 0) {
+    /* Target is outside chunkbox. */
+    throw std::range_error("Attempting to read data from unloaded chunk.");
+  }
+  if (!target) {
+    /* Chunk doesn't exist. */
     throw std::range_error("Attempting to read data from nonexisting chunk.");
   }
 
@@ -493,7 +697,7 @@ void Renderer::set_default_alpha(std::vector<unsigned char>& types,
       if (tex & TOP) {
         default_colours[types[i]].top.A = alpha;
       }
-      if (tex & SIDES) {
+      if (tex & CARDINAL) {
         default_colours[types[i]].side.A = alpha;
       }
     }
@@ -511,7 +715,7 @@ void Renderer::set_default_alpha(std::vector<unsigned char>& types,
         if (tex & TOP) {
           default_colours[i].top.A = alpha;
         }
-        if (tex & SIDES) {
+        if (tex & CARDINAL) {
           default_colours[i].side.A = alpha;
         }
       }
@@ -529,7 +733,7 @@ void Renderer::set_alpha(std::vector<unsigned char>& types,
       if (tex & TOP) {
         colours[types[i]].top.A = alpha;
       }
-      if (tex & SIDES) {
+      if (tex & CARDINAL) {
         colours[types[i]].side.A = alpha;
       }
     }
@@ -547,7 +751,7 @@ void Renderer::set_alpha(std::vector<unsigned char>& types,
         if (tex & TOP) {
           colours[i].top.A = alpha;
         }
-        if (tex & SIDES) {
+        if (tex & CARDINAL) {
           colours[i].side.A = alpha;
         }
       }

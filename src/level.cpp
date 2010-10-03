@@ -125,6 +125,7 @@ void Level::render(list<Renderer*>& renderers) {
   /* Initialise renderers with map size. */
   for (list<Renderer*>::iterator renderer = renderers.begin();
        renderer != renderers.end(); ++renderer) {
+    debug << "Initializing renderer..." << std::endl;
     (*renderer)->set_surface(top_right, bottom_left);
   }
 
@@ -133,6 +134,7 @@ void Level::render(list<Renderer*>& renderers) {
   chunkmap::reverse_iterator deleter = chunks.rbegin();
 
   /* Load and render chunks in parallel. */
+  debug << "Initializing parallel loading..." << std::endl;
 #pragma omp parallel sections
   {
 #pragma omp section
@@ -162,13 +164,13 @@ void Level::render(list<Renderer*>& renderers) {
         /* Calculate positions of bordering chunks. */
         position border_pos[4];
         border_pos[0] = it->first;
-        border_pos[0].first--;  // North
+        border_pos[0].second--; // North
         border_pos[1] = it->first;
-        border_pos[1].second--; // East
+        border_pos[1].first--;  // East
         border_pos[2] = it->first;
-        border_pos[2].first++;  // South
+        border_pos[2].second++; // South
         border_pos[3] = it->first;
-        border_pos[3].second++; // West
+        border_pos[3].first++;  // West
 
         /* Wait for the chunk's final requirement to load. */
         chunkmap::iterator reqit;

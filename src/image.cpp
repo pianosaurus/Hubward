@@ -1,3 +1,4 @@
+#include "output.hpp"
 #include "image.hpp"
 #include "pixel.hpp"
 
@@ -198,7 +199,18 @@ void Image::output(std::string filename, bool trim) const {
         break;
       }
     }
+
+    /* Make sure there is anything left. */
+    if (width < 0 || height < 0) {
+      throw std::runtime_error("Empty image.");
+    }
   }
+
+  /* Some debug output. */
+  debug << "Writing ";
+  if (trim) debug << "trimmed ";
+  debug << "image " << width << "x" << height
+        << "+" << left << "+" << top << std::endl;
 
   /* Create file. */
   FILE *fp = fopen(filename.c_str(), "wb");
