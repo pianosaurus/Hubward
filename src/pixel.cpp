@@ -49,3 +49,9 @@ void Pixel::mix(const Pixel& source) {
   B = (B / 2) + (source.B / 2);
   A = (A / 2) + (source.A / 2);
 }
+
+/* Stream output. */
+std::ostream& operator<<(std::ostream& o, const Pixel& p) {
+  o << int(p.R) << "." << int(p.G) << "." << int(p.B) << "." << int(p.A);
+  return o;
+}

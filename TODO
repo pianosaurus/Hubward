@@ -3,9 +3,13 @@ Global:
   Create a man page.
 
 
-NBT class: Add seek functions, and set up renderers to report their
+NBT: Add seek functions, and set up renderers to report their
   needed named tags. That way, the NBT reader can skip past unneeded
   tags, saving memory and hopefully increase speed.
+
+Renderer: Back to front rendering is a bit ugly on transparent
+  surfaces like water (try oblique facing south or west). Probably
+  a rounding error.
 
 intstring: Put base36 conversions here.
 

@@ -16,6 +16,7 @@ class Image;
  * This class does the default rendering and outputs to filesystem.
  */
 class Renderer {
+  bool test;
 public:
   struct chunkbox {
     Chunk* center; // Chunk being rendered.
@@ -138,9 +139,8 @@ protected:
   virtual unsigned char getlight(const chunkbox& chunks, pvector pos,
                                  direction dir);
 
-  /* Get a block, light it and blend behind a pixel. Return true if
-     the block was lit.  */
-  virtual bool blendblock(const chunkbox& chunks, pvector pos,
+  /* Get a block, light it and blend behind a pixel. */
+  virtual void blendblock(const chunkbox& chunks, pvector pos,
                           direction dir, Pixel& top);
 
   /* Negate a cardinal or ordinal direction. */

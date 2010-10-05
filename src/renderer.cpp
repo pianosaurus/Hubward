@@ -381,7 +381,7 @@ void Renderer::render(const chunkbox& chunks) {
           int img_x = off_x + w;
 
           /* Get initial pixel colour. */
-          Pixel dot(0,0,0,0);
+          Pixel dot;
           if (front_to_back) {
             dot = (*image)(img_x, img_y);
             if (dot.A == 0xff) {
@@ -534,6 +534,7 @@ Pixel Renderer::getblock(const chunkbox& chunks, pvector pos,
   Pixel result = (dir & TOP) ? colours[type].top : colours[type].side;
 
   if (type == 0x08 || type == 0x09) {
+    test = true;
     /* Block is water. Set alpha based on depth. */
     try {
       unsigned char invdepth = target->data(pos);
@@ -541,6 +542,8 @@ Pixel Renderer::getblock(const chunkbox& chunks, pvector pos,
         result.A = 0xff - invdepth * 0x0f;
       }
     } catch (std::runtime_error& e) { /* Data was not loaded. */ }
+  } else {
+    test = false;
   }
 
   return result;
@@ -601,14 +604,14 @@ unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
     ((l_block * (255 - options.lightlevel.first)) / 255);
 }
 
-/* Get a block, light it and blend behind a pixel. Return true if the
-   block was lit.  */
-bool Renderer::blendblock(const chunkbox& chunks, pvector pos,
+/* Get a block, light it and blend behind a pixel. */
+void Renderer::blendblock(const chunkbox& chunks, pvector pos,
                           direction dir, Pixel& top) {
   Pixel under = getblock(chunks, pos, dir);
   if (under.A > 0) {
     unsigned char light = getlight(chunks, pos, dir);
     under.light(light);
+
     /* Adjust lighting slightly depending on height. */
     if (options.dimdepth.first) {
       under.light(pos.y + 128);
@@ -616,11 +619,7 @@ bool Renderer::blendblock(const chunkbox& chunks, pvector pos,
     if (under.A > 0) {
       top.blend_under(under);
     }
-
-    return light;
   }
-
-  return true;
 }
 
 /* Negate a cardinal or ordinal direction. */

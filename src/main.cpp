@@ -200,6 +200,7 @@ int main(int argc, char** argv) {
   level->render(renderers);
 
   /* Output the result. */
+  bool all_ok = true;
   verbose << "Finished reading. Writing images to disk." << std::endl;
   Renderer::RenderList::iterator renderer = renderers.begin();
   while (!renderers.empty()) {
@@ -207,6 +208,7 @@ int main(int argc, char** argv) {
       (*renderer)->save();
     } catch (std::exception& e) {
       std::cerr << "Failed to save rendering: " << e.what() << std::endl;
+      all_ok = false;
     }
 
     /* Delete the renderer, just to be nice. */
@@ -217,5 +219,8 @@ int main(int argc, char** argv) {
   /* Finished. */
   delete level;
   std::cerr << "Done." << std::endl;
-  return 0;
+  if (all_ok)
+    return 0;
+  else
+    return 1;
 }

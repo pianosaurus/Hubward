@@ -1,6 +1,8 @@
 #ifndef H_PIXEL
 #define H_PIXEL
 
+#include <ostream>
+
 /*
  * A simple structure for colour data, with blending methods.
  */
@@ -36,5 +38,7 @@ public:
   /* Mix in another pixel 50/50.*/
   void mix(const Pixel& source);
 };
+
+std::ostream& operator<<(std::ostream& o, const Pixel& p);
 
 #endif
