@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([MineDraft],
+AC_INIT([Hubward],
         m4_esyscmd([git describe | tr -d '\n']),
         [ole.chr@microman.no])
 AC_CONFIG_SRCDIR([src/level.cpp])
@@ -13,7 +13,7 @@ AC_LANG([C++])
 AC_CANONICAL_HOST
 
 # Automake init.
-AM_INIT_AUTOMAKE([foreign dist-bzip2 dist-lzma])
+AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-bzip2 dist-xz])
 
 # Checks for programs.
 : ${CXXFLAGS="-O2"}

@@ -282,7 +282,7 @@ void Level::update_bounds(const position& pos) {
 
 /* Convert from base36. */
 int Level::base36toint(const std::string& s) {
-  /* TODO: Overflows on large input. Not relevant to MineDraft, but
+  /* TODO: Overflows on large input. Not relevant to this project, but
      it should be fixed anyway. */
   int result = 0;
   const char* cstr = s.c_str();
