@@ -156,9 +156,9 @@ int main(int argc, char** argv) {
       }
 
       /* Add to intersect list. */
-      for (int xx = 0; xx < width; xx++) {
-        for (int zz = 0; zz < height; zz++) {
-          chunks.push_back({xx + west, zz + south});
+      for (int xx = 0; xx < height; xx++) {
+        for (int zz = 0; zz < width; zz++) {
+          chunks.push_back({xx + south, zz + west});
         }
       }
     }

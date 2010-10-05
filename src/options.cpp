@@ -66,6 +66,9 @@ void usage(const char* binary) {
        << "\t<dimdepth, litdepth>. Use dimdepth to adjust brightness of\n"
        << "\tthe surface depending on height. This will enable you to see\n"
        << "\theight features on top-down maps without contour lines.\n";
+  cerr << "  Angle keywords [%a]: (defaults to <topdown>)\n"
+       << "\t<oblique, topdown>. Oblique only works for cardinal directions\n"
+       << "\tin this alpha release.\n";
   cerr << "  Special keywords: (defaults to nothing)\n"
        << "\t<contour> draws contour lines on a transparent background.\n";
   cerr << "\n  Overlays can be added with all the same keywords except\n"
@@ -83,8 +86,8 @@ void usage(const char* binary) {
   cerr << "\nExamples:\n";
   cerr << "  Render a default map:\n"
        << "\t" << binary << " -n2 map.png\n";
-  cerr << "  Render three maps with various lighting conditions:\n"
-       << "\t" << binary << " -n2 map-%l.png:day,night,twilight\n";
+  cerr << "  Render four oblique maps of the area around spawn.:\n"
+       << "\t" << binary << " -c15x15 -n2 map-%r.png:oblique,night,cardinal\n";
   cerr << "  Render a map facing east with contour lines:\n"
        << "\t" << binary << " -n2 map.png:east:contour\n";
 }

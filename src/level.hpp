@@ -18,7 +18,7 @@ class Chunk;
  */
 class Level {
 public:
-  /* Chunk positions given as z,x. */
+  /* Chunk positions given as x,z. */
   typedef std::pair<int, int> position;
 
   /* Constructors. */

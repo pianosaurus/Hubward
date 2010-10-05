@@ -24,7 +24,7 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
   std::list<directionopt> rotations;
   std::list<ucharopt> lightlevels;
   std::list<boolopt> dimdepths;
-  std::list<boolopt> obliques;
+  std::list<boolopt> angles;
 
   /* Type of renderer and list of requested overlays. */
   overlay_type type = DEFAULT;
@@ -104,9 +104,9 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
       } else if (opt == "litdepth") {
         dimdepths.push_back(boolopt(false, opt));
       } else if (opt == "oblique") {
-        obliques.push_back(boolopt(true, opt));
+        angles.push_back(boolopt(true, opt));
       } else if (opt == "topdown") {
-        obliques.push_back(boolopt(false, opt));
+        angles.push_back(boolopt(false, opt));
       } else if (opt == "day") {
         lightlevels.push_back(ucharopt(255, opt));
       } else if (opt == "night") {
@@ -139,11 +139,11 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
     if (!rotations.empty()) {
       throw std::logic_error("You cannot specify rotation for overlays.");
     }
-    if (!rotations.empty()) {
-      throw std::logic_error("You cannot specify obliqueness for overlays.");
+    if (!angles.empty()) {
+      throw std::logic_error("You cannot specify angles for overlays.");
     }
     rotations.push_back(source->dir);
-    obliques.push_back(source->oblique);
+    angles.push_back(source->oblique);
 
     /* No multiples allowed. */
     if (lightlevels.size() > 1 || dimdepths.size() > 1) {
@@ -165,8 +165,8 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
       lightlevels.push_back(ucharopt(127, "twilight")); // Twilight.
     if (dimdepths.empty())
       dimdepths.push_back(boolopt(true, "dimdepth"));   // Dim deep areas.
-    if (obliques.empty())
-      obliques.push_back(boolopt(false, "topdown"));    // Top down map.
+    if (angles.empty())
+      angles.push_back(boolopt(false, "topdown"));      // Top down map.
 
     /* If any lists have more than 1 entries, we need
        wildcards in the filename. */
@@ -182,9 +182,9 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
         (filename.find("%d") == std::string::npos)) {
       throw std::logic_error("Depth dimming multiple needs %d in filename.");
     }
-    if ((obliques.size() > 1) &&
-        (filename.find("%o") == std::string::npos)) {
-      throw std::logic_error("Obliqueness multiple needs %o in filename.");
+    if ((angles.size() > 1) &&
+        (filename.find("%a") == std::string::npos)) {
+      throw std::logic_error("Angle multiple needs %a in filename.");
     }
   }
 
@@ -204,31 +204,31 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
            dimdepth != dimdepths.end(); ++dimdepth) {
         std::string dimfile = wildcard(lightfile, "%d", dimdepth->second);
 
-        for (std::list<boolopt>::const_iterator oblique = obliques.begin();
-             oblique != obliques.end(); ++oblique) {
-          std::string obliquefile = wildcard(dimfile, "%o", oblique->second);
+        for (std::list<boolopt>::const_iterator angle = angles.begin();
+             angle != angles.end(); ++angle) {
+          std::string anglefile = wildcard(dimfile, "%a", angle->second);
 
           /* Make sure we have a unique filename for this renderer. */
           std::pair<std::set<std::string>::iterator, bool> unique =
-            filenames.insert(obliquefile);
+            filenames.insert(anglefile);
           if (!unique.second) {
-            debug << "Duplicate file name. Skipping " << obliquefile
+            debug << "Duplicate file name. Skipping " << anglefile
                   << std::endl;
             continue;
           }
 
           /* Make recipe struct. */
-          const recipe target = {*rotation, *lightlevel, *dimdepth, *oblique};
+          const recipe target = {*rotation, *lightlevel, *dimdepth, *angle};
 
           /* Create renderer depending on type. */
           Renderer* add;
 
           switch (type) {
           case DEFAULT:
-            add = new Renderer(obliquefile, target);
+            add = new Renderer(anglefile, target);
             break;
           case CONTOUR:
-            add = new Render_Contour(obliquefile, target);
+            add = new Render_Contour(anglefile, target);
             break;
           }
 
@@ -273,8 +273,8 @@ Renderer::~Renderer() {
 /* Let the renderer know the coordinates of the map corners. */
 void Renderer::set_surface(const Level::position& top_right_chunk,
                            const Level::position& bottom_left_chunk) {
-  top_right = { top_right_chunk.second, top_right_chunk.first, 0 };
-  bottom_left = { bottom_left_chunk.second, bottom_left_chunk.first, 0 };
+  top_right = { top_right_chunk.first, top_right_chunk.second, 0 };
+  bottom_left = { bottom_left_chunk.first, bottom_left_chunk.second, 0 };
   pvector adjust = {1, 1};
   pvector size = ((bottom_left - top_right) + adjust) * 16;
 
@@ -331,7 +331,7 @@ void Renderer::render(const chunkbox& chunks) {
 
         /* Paint new dot to map. */
         int img_x = (bottom_left.z - chunks.center->get_position().z) * 16
-                    + (15 - z);
+          + (15 - z);
         int img_y = (chunks.center->get_position().x - top_right.x) * 16 + x;
         (*image)(img_x, img_y) = dot;
       }
