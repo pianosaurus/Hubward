@@ -1,0 +1,6 @@
+# To cross compile for a mingw32 host, run the following command
+# (or just source this file) before make:
+
+./configure --host=i686-pc-mingw32 \
+    "CXXFLAGS=-mthreads" \
+    "LDFLAGS=-static-libstdc++ -static-libgcc -static"

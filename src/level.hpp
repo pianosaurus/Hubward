@@ -21,6 +21,9 @@ public:
   /* Chunk positions given as x,z. */
   typedef std::pair<int, int> position;
 
+  /* Generate chunk list from geometry string. */
+  static std::list<position> chunk_list(const std::string& geometry);
+
   /* Constructors. */
   /* Find all chunk files. */
   Level(const std::string& path);

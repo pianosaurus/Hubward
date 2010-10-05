@@ -1,4 +1,4 @@
-CXXFLAGS = -pedantic -O3 -std=c++0x -pipe $(OPENMP_CFLAGS)
+AM_CXXFLAGS = -std=c++0x $(OPENMP_CXXFLAGS) -DUNICODE
 
 bin_PROGRAMS = minedraft
 minedraft_SOURCES = main.cpp chunk.cpp chunk.hpp image.cpp image.hpp \

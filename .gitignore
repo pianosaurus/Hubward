@@ -6,6 +6,8 @@ Makefile.in
 aclocal.m4
 
 config.h
+config.h.in
+config.h.in~
 config.log
 config.status
 stamp-h1
@@ -14,6 +16,7 @@ configure
 depcomp
 install-sh
 missing
+config.guess
+config.sub
 
 autom4te.cache/*
-k

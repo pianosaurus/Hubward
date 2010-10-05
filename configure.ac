@@ -7,22 +7,28 @@ AC_INIT([MineDraft],
         [ole.chr@microman.no])
 AC_CONFIG_SRCDIR([src/level.cpp])
 AC_CONFIG_HEADERS([config.h])
+AC_LANG([C++])
 
-# Automake init
+# Set up for cross-compiling
+AC_CANONICAL_HOST
+
+# Automake init.
 AM_INIT_AUTOMAKE([foreign dist-bzip2 dist-lzma])
 
 # Checks for programs.
+: ${CXXFLAGS="-O2"}
+: ${CFLAGS="-O2"}
 AC_PROG_CXX
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB([png], [png_write_row], [],
-             AC_MSG_ERROR([This package requires libpng.]))
 AC_CHECK_LIB([z], [gzopen], [],
-             AC_MSG_ERROR([This package requires zlib.]))
+             [AC_MSG_ERROR([This package requires zlib.])])
+AC_CHECK_LIB([png], [png_write_row], [],
+             [AC_MSG_ERROR([This package requires libpng.])])
 
 # Checks for header files.
-AC_CHECK_HEADERS_ONCE([unistd.h windows.h], [break])
+AC_CHECK_HEADERS_ONCE([unistd.h windows.h cstdlib])
 
 # Check for OpenMP support.
 AC_OPENMP
@@ -32,7 +38,5 @@ AC_HEADER_STDBOOL
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
-
-AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile])
 AC_OUTPUT
