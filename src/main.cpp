@@ -6,7 +6,7 @@
 
 #include <stdexcept>
 
-#include "version.h"
+#include "../config.h"
 
 #include "level.hpp"
 #include "renderer.hpp"
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
 
     } else if (opt->first == "version") {
       /* Print version information and exit. */
-      cerr << APPNAME << " " << APPVERSION << "\n";
+      cerr << PACKAGE_STRING << "\n";
       return 0;
 
     } else if (opt->first == "verbose") {

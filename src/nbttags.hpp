@@ -141,6 +141,6 @@ namespace NBT {
     ~TAG_Compound();
   };
 
-};
+}
 
 #endif

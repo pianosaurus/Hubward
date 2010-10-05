@@ -29,6 +29,6 @@ namespace NBT {
     const TAG* fetch(std::string path);
   };
 
-};
+}
 
 #endif

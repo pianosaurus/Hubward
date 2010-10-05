@@ -1,0 +1,32 @@
+MineDraft installation notes:
+-----------------------------
+
+This package depends on
+  zlib    (tested with 1.2.3)
+  libpng  (tested with 1.4.3)
+
+You may need the -dev or -devel versions, as building it from
+source requires the availability of the library header files.
+
+
+To build it, run (as regular user):
+  ./configure
+  make
+
+The binary can be found in the src/ subdirectory.
+
+
+
+Building from repository:
+-------------------------
+
+If you got this source directly from the repository, you
+will need to generate the build scripts first. This requires
+autotools.
+
+To set up the build environment, run:
+  aclocal
+  automake --add-missing
+  autoconf
+
+Then follow the regular procedure.

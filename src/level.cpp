@@ -13,10 +13,10 @@
 #include <stdexcept>
 
 /* Yielding some cpu time to other threads. */
-#ifdef __unix__
+#ifdef HAVE_UNISTD_H
   #include <unistd.h>
   #define yield() usleep(10)
-#elif WIN32
+#elif HAVE_WINDOWS_H
   #include <windows.h>
   #define yield() sleep(0)
 #else
