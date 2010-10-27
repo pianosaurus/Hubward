@@ -6,3 +6,6 @@ zipdist: src/hubward$(EXEEXT)
 					exit -1)
 	zip --junk-paths "$(PACKAGE_NAME)-$(PACKAGE_VERSION)-$(host).zip" \
 		$^ src/pthreadGC2.dll
+	cp -n README readme.txt && cp -n COPYING license.txt && \
+	zip -m "$(PACKAGE_NAME)-$(PACKAGE_VERSION)-$(host).zip" readme.txt \
+		license.txt
