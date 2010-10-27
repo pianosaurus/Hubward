@@ -37,7 +37,7 @@ Pixel Render_Contour::getblock(const chunkbox& chunks, pvector pos,
 
   /* Transparent and partly transparent blocks are invisible. */
   if (result.A < 0xff) {
-    return {0, 0, 0, 0};
+    return Pixel(0, 0, 0, 0);
   }
 
   /* Tops are black if divisible by 5 (offset for default shoreline). */
@@ -62,10 +62,10 @@ Pixel Render_Contour::getblock(const chunkbox& chunks, pvector pos,
     } catch (std::exception& e) {}
 
     if (air)
-      return {0, 0, 0, 0xff};
+      return Pixel(0, 0, 0, 0xff);
   }
 
-  return {0xff, 0xff, 0xff, 0xff};
+  return Pixel(0xff, 0xff, 0xff, 0xff);
 }
 
 /* Everything is fully lit in contour mode. */
@@ -79,7 +79,7 @@ unsigned char Render_Contour::getlight(const chunkbox& chunks,
 void Render_Contour::finalise() {
   if (image) {
     /* Make white transparent. */
-    image->colour_replace({0xff, 0xff, 0xff, 0xff}, {0, 0, 0, 0});
+    image->colour_replace(Pixel(0xff, 0xff, 0xff, 0xff), Pixel(0, 0, 0, 0));
   }
   Renderer::finalise();
 }

@@ -21,6 +21,9 @@ AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-bzip2 dist-xz])
 AC_PROG_CXX
 AC_PROG_CC
 
+# Define AM_CXXFLAGS everywhere.
+AC_SUBST([AM_CXXFLAGS])
+
 # Checks for libraries.
 AC_CHECK_LIB([z], [gzopen], [],
              [AC_MSG_ERROR([This package requires zlib.])])

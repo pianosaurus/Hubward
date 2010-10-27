@@ -273,9 +273,13 @@ Renderer::~Renderer() {
 /* Let the renderer know the coordinates of the map corners. */
 void Renderer::set_surface(const Level::position& top_right_chunk,
                            const Level::position& bottom_left_chunk) {
-  top_right = { top_right_chunk.first, top_right_chunk.second, 0 };
-  bottom_left = { bottom_left_chunk.first, bottom_left_chunk.second, 0 };
-  pvector adjust = {1, 1};
+  top_right.x = top_right_chunk.first;
+  top_right.z = top_right_chunk.second;
+  top_right.y = 0;
+  bottom_left.x = bottom_left_chunk.first;
+  bottom_left.z = bottom_left_chunk.second;
+  bottom_left.y = 0;
+  pvector adjust = pvector(1, 1);
   pvector size = ((bottom_left - top_right) + adjust) * 16;
 
   /* Make sure we only do this once. */
@@ -285,16 +289,16 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
   if (!options.oblique.first) {
     /* Allocate memory for a flat unrotated map. We may rotate
        it when rendering is finished. */
-    image = new Image({size.z, size.x});
+    image = new Image(Image::ivector(size.z, size.x));
   } else {
     /* Calculate size of oblique map. */
     if (options.dir.first & CARDINAL) {
       if (options.dir.first & (N | S)) {
         /* North or south facing map. */
-        image = new Image({size.z, size.x + 128});
+        image = new Image(Image::ivector(size.z, size.x + 128));
       } else {
         /* East or west facing map. */
-        image = new Image({size.x, size.z + 128});
+        image = new Image(Image::ivector(size.x, size.z + 128));
       }
     } else if (options.dir.first & ORDINAL) {
       /* TODO: Calculate size of ordinal oblique map. */
@@ -322,7 +326,7 @@ void Renderer::render(const chunkbox& chunks) {
       for (int z = 0; z < 16; z++) {
         Pixel dot;
         for (int y = 127; y >= 0; y--) {
-          blendblock(chunks, {x, z, y}, TOP, dot);
+          blendblock(chunks, pvector(x, z, y), TOP, dot);
           if (dot.A == 0xff) {
             /* Done with this pixel. */
             break;

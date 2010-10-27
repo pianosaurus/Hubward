@@ -102,17 +102,17 @@ Image::Image(const Image& source, int rotate) {
           if (s_y > 0) {
             dot.mix(source(s_x, s_y - 1));
           } else {
-            dot.mix({0, 0, 0, 0});
+            dot.mix(Pixel(0, 0, 0, 0));
           }
           if (s_x < source.dimensions().x - 2) {
             dot.mix(source(s_x + 1, s_y));
           } else {
-            dot.mix({0, 0, 0, 0});
+            dot.mix(Pixel(0, 0, 0, 0));
           }
           if (s_y < source.dimensions().y - 2) {
             dot.mix(source(s_x, s_y + 1));
           } else {
-            dot.mix({0, 0, 0, 0});
+            dot.mix(Pixel(0, 0, 0, 0));
           }
 
           /* Write result. */

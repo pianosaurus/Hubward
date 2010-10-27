@@ -123,7 +123,8 @@ int main(int argc, char** argv) {
   Renderer::RenderList renderers;
   for (list<string>::iterator str = renderstrs.begin();
        str != renderstrs.end(); ++ str) {
-    renderers.splice(renderers.begin(), Renderer::make_renderers(*str));
+    Renderer::RenderList tmp_list = Renderer::make_renderers(*str);
+    renderers.splice(renderers.begin(), tmp_list);
   }
 
   /* Make sure there is at least one renderer.*/

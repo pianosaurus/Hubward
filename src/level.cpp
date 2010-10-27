@@ -407,7 +407,7 @@ std::list<Level::position> Level::chunk_list(const std::string& geometry) {
   /* Fill chunk list. */
   for (int xx = 0; xx < height; xx++) {
     for (int zz = 0; zz < width; zz++) {
-      result.push_back({xx + south, zz + west});
+      result.push_back(position(xx + south, zz + west));
     }
   }
 

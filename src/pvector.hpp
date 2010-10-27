@@ -17,9 +17,9 @@ struct pvector {
   pvector(int x, int z, int y) : x(x), z(z), y(y) {};
 
   /* Transpose vector. */
-  pvector transpose_xz() const { return {z, x, y}; };
-  pvector transpose_zy() const { return {x, y, z}; };
-  pvector transpose_xy() const { return {y, z, x}; };
+  pvector transpose_xz() const { return pvector(z, x, y); };
+  pvector transpose_zy() const { return pvector(x, y, z); };
+  pvector transpose_xy() const { return pvector(y, z, x); };
 
   /* Some operations. */
   pvector operator+(const pvector& v) const;

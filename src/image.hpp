@@ -15,7 +15,10 @@ public:
   struct ivector {
     int x;
     int y;
-    ivector transpose() { return {y, x}; };
+
+    ivector() : x(0), y(0) {};
+    ivector(int x, int y) : x(x), y(y) {};
+    ivector transpose() { return ivector(y, x); };
   };
 
   /* Allocate and initialise memory. */

@@ -1,4 +1,4 @@
-AM_CXXFLAGS = -std=c++0x $(OPENMP_CXXFLAGS) -DUNICODE
+AM_CXXFLAGS = -std=c++98 $(OPENMP_CXXFLAGS) -DUNICODE @AM_CXXFLAGS@
 
 bin_PROGRAMS = hubward
 hubward_SOURCES = main.cpp chunk.cpp chunk.hpp image.cpp image.hpp \
