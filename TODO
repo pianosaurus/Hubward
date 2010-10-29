@@ -19,6 +19,8 @@ Planned features:
   Windows installer based on NSIS.
   Statistics (CSV-format).
   Chunk caching based on file modification time stamps.
+    Cache rendered chunk. Because of lighting, a chunk may have to be
+    re-rendered if a neighbour changed.
   Save some PNG metadata:
     Annotated locations
     Image coordinates of position 0,0

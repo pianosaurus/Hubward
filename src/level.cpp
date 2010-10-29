@@ -141,6 +141,8 @@ void Level::render(list<Renderer*>& renderers) {
   }
 
   /* Load and render chunks in parallel. */
+#ifdef _OPENMP
+  int loaded = 0;
   debug << "Initializing parallel loading..." << std::endl;
 #pragma omp parallel sections
   {
@@ -150,6 +152,17 @@ void Level::render(list<Renderer*>& renderers) {
       for (chunkmap::reverse_iterator it = chunks.rbegin();
            it != chunks.rend(); ++it) {
         Chunk* load;
+        bool wait;
+#pragma omp critical(loadcount)
+        wait = loaded >= 10;
+        if (wait)
+          debug << "Pausing loading. Waiting for renderer(s)." << std::endl;
+        while (wait) {
+          /* We are getting unnecessarily far ahead. Wait a bit. */
+          yield();
+#pragma omp critical(loadcount)
+          wait = loaded >= 10;
+        }
         try {
           load = new Chunk(it->second.first, it->first);
         } catch (std::exception& e) {
@@ -158,6 +171,8 @@ void Level::render(list<Renderer*>& renderers) {
           debug << e.what() << std::endl;
           load = new Chunk(it->first);
         }
+#pragma omp critical(loadcount)
+        loaded++;
 #pragma omp critical(chunks)
         it->second.second = load;
       }
@@ -172,6 +187,8 @@ void Level::render(list<Renderer*>& renderers) {
         Chunk* chunk;
 #pragma omp critical(chunks)
         chunk = it->second.second;
+        if (chunk == 0)
+          debug << "Waiting for data." << std::endl;
         while (chunk == 0) {
           /* Give up a timeslice. */
           yield();
@@ -195,9 +212,44 @@ void Level::render(list<Renderer*>& renderers) {
         /* Delete the chunk from memory. */
         delete chunk;
         it->second.second = 0;
+#pragma omp critical(loadcount)
+        loaded--;
       }
     }
   }
+
+#else
+  debug << "Initializing sequential loading..." << std::endl;
+  for (chunkmap::reverse_iterator it = chunks.rbegin();
+       it != chunks.rend(); ++it) {
+    /* Load the chunk. */
+    Chunk* chunk;
+    try {
+      chunk = new Chunk(it->second.first, it->first);
+    } catch (std::exception& e) {
+      std::cerr << "Failed to load chunk "
+                << it->first.second << "x" << it->first.first << std::endl;
+      debug << e.what() << std::endl;
+      continue;
+    }
+
+    /* Render it. */
+    for (list<Renderer*>::iterator renderer = renderers.begin();
+         renderer != renderers.end(); ++renderer) {
+      try {
+        (*renderer)->render(*chunk);
+      } catch (std::exception& e) {
+        std::cerr << "Failed to render chunk "
+                  << it->first.second << "x"
+                  << it->first.first << std::endl;
+        debug << e.what() << std::endl;
+      }
+    }
+
+    /* Delete it from memory. */
+    delete chunk;
+  }
+#endif
 
   /* Finalise all renderers. */
   for (list<Renderer*>::iterator renderer = renderers.begin();

@@ -330,6 +330,7 @@ void Renderer::render(const Chunk& chunk) {
     /* Flat map. Render it unrotated. We may rotate it when
        all chunks are rendered. */
     for (int x = 0; x < 16; x++) {
+#pragma omp parallel for
       for (int z = 0; z < 16; z++) {
         Pixel dot;
         for (int y = 127; y >= 0; y--) {
@@ -387,6 +388,7 @@ void Renderer::render(const Chunk& chunk) {
       }
 
       for (int w = 0; w < 16; w++) {
+#pragma omp parallel for
         for (int y = 16 + 127; y >= 0; y--) {
           /* Calculate image coordinates. */
           int img_y = off_y - y;

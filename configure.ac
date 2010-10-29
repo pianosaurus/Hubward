@@ -15,6 +15,9 @@ AC_CANONICAL_HOST
 # Automake init.
 AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-bzip2 dist-xz])
 
+# Initialise RANLIB
+AC_PROG_RANLIB
+
 # Checks for programs.
 : ${CXXFLAGS="-O2"}
 : ${CFLAGS="-O2"}
