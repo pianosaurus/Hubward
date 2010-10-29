@@ -11,6 +11,7 @@ AC_LANG([C++])
 
 # Set up for cross-compiling
 AC_CANONICAL_HOST
+AC_CHECK_TOOL([STRIP],[strip])
 
 # Automake init.
 AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-bzip2 dist-xz])
