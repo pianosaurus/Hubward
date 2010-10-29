@@ -1,45 +1,41 @@
 #include "pixel.hpp"
 
+/* Compare with another pixel. */
+bool Pixel::operator==(const Pixel& o) {
+  static const double prec = 0.004;
+  return (R > o.R - prec) && (R < o.R + prec) &&
+         (G > o.G - prec) && (G < o.G + prec) &&
+         (B > o.B - prec) && (B < o.B + prec) &&
+         (A > o.A - prec) && (A < o.A + prec);
+}
+
 /* Alpha blend another pixel underneath self. */
 void Pixel::blend_under(const Pixel& source) {
-  unsigned char nA = A + ((255-A)*source.A)/255;
-  A = (nA == 0) ? 0 : A * 255 / nA;
-  unsigned char sA = 255 - A;
-  R = (R * A + source.R * sA) / 255;
-  G = (G * A + source.G * sA) / 255;
-  B = (B * A + source.B * sA) / 255;
+  double nA = A + ((1.0f - A)*source.A);
+  A = (nA == 0) ? 0 : A / nA;
+  double sA = 1.0f - A;
+  R = (R * A + source.R * sA);
+  G = (G * A + source.G * sA);
+  B = (B * A + source.B * sA);
   A = nA;
 }
 
 /* Alpha blend another pixel over self. */
 void Pixel::blend_over(const Pixel& source) {
-  unsigned char nA = source.A + ((255-source.A)*A)/255;
-  A = (nA == 0) ? 0 : source.A * 255 / nA;
-  unsigned char tA = 255 - A;
-  R = (R * tA + source.R * A) / 255;
-  G = (G * tA + source.G * A) / 255;
-  B = (B * tA + source.B * A) / 255;
+  double nA = source.A + ((1.0f - source.A)*A);
+  A = (nA == 0) ? 0 : source.A / nA;
+  double tA = 1.0f - A;
+  R = (R * tA + source.R * A);
+  G = (G * tA + source.G * A);
+  B = (B * tA + source.B * A);
   A = nA;
 }
 
-/* Shade pixel. 0 = no change, +/- 127 = white/black.. */
-void Pixel::shade(signed char value) {
-  if (value >= 0) {
-    R += (127 - R) * value / 127;
-    G += (127 - G) * value / 127;
-    B += (127 - B) * value / 127;
-  } else {
-    R += R * value / 127;
-    G += G * value / 127;
-    B += B * value / 127;
-  }
-}
-
 /* Light pixel. */
-void Pixel::light(unsigned char value) {
-  R = (R * value) / 255;
-  G = (G * value) / 255;
-  B = (B * value) / 255;
+void Pixel::light(double value) {
+  R = (R * value);
+  G = (G * value);
+  B = (B * value);
 }
 
 /* Mix in another pixel 50/50.*/
@@ -50,8 +46,19 @@ void Pixel::mix(const Pixel& source) {
   A = (A / 2) + (source.A / 2);
 }
 
+/* Convert to low precision chars. */
+Pixel::charval Pixel::chars() {
+  Pixel::charval result;
+  result.R = int(R*255);
+  result.G = int(G*255);
+  result.B = int(B*255);
+  result.A = int(A*255);
+  return result;
+}
+
 /* Stream output. */
 std::ostream& operator<<(std::ostream& o, const Pixel& p) {
-  o << int(p.R) << "." << int(p.G) << "." << int(p.B) << "." << int(p.A);
+  o << int(p.R * 255) << "." << int(p.G * 255) << "."
+    << int(p.B * 255) << "." << int(p.A * 255);
   return o;
 }

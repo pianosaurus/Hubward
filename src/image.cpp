@@ -12,17 +12,12 @@ Image::Image(ivector dimensions, const Pixel* fill) :
 
   data = new Pixel[size.x * size.y];
 
-  /* Fill the allocated memory with something reasonable. */
-  bool gotfill = true;
-  if (!fill) {
-    gotfill = false;
-    fill = new Pixel(0xff, 0xff, 0xff, 0x00);
+  /* Set fill colour. */
+  if (fill) {
+    for (int i = 0; i < size.x * size.y; i++) {
+      data[i] = *fill;
+    }
   }
-  for (int i = 0; i < size.x * size.y; i++) {
-    data[i] = *fill;
-  }
-  if (!gotfill)
-    delete fill;
 }
 
 /* Copy another image. Integer rotate is 0 to 7 clockwise. */
@@ -71,7 +66,7 @@ Image::Image(const Image& source, int rotate) {
         int s_y = 0; // Source y coordinate.
 
         if (rotate == 1) {
-          /* 45 degrees from north. ?? */
+          /* 45 degrees from north. */
           s_x = y - corner + x;
           s_y = source.dimensions().y - (x + corner - y) - 1;
         } else if (rotate == 3) {
@@ -102,17 +97,17 @@ Image::Image(const Image& source, int rotate) {
           if (s_y > 0) {
             dot.mix(source(s_x, s_y - 1));
           } else {
-            dot.mix(Pixel(0, 0, 0, 0));
+            dot.mix(Pixel(0.0f, 0.0f, 0.0f, 0.0f));
           }
           if (s_x < source.dimensions().x - 2) {
             dot.mix(source(s_x + 1, s_y));
           } else {
-            dot.mix(Pixel(0, 0, 0, 0));
+            dot.mix(Pixel(0.0f, 0.0f, 0.0f, 0.0f));
           }
           if (s_y < source.dimensions().y - 2) {
             dot.mix(source(s_x, s_y + 1));
           } else {
-            dot.mix(Pixel(0, 0, 0, 0));
+            dot.mix(Pixel(0.0f, 0.0f, 0.0f, 0.0f));
           }
 
           /* Write result. */
@@ -164,12 +159,13 @@ void Image::output(std::string filename, bool trim) const {
   int left = 0;
   int width = size.x;
   int height = size.y;
+  static const double prec = 0.004;
   if (trim) {
     left = size.x - 1;
     int right = 0;
     /* Find top of image. */
     for (int i = 0; i < (size.x * size.y); i++) {
-      if (data[i].A > 0) {
+      if (data[i].A > prec) {
         top = i / size.x;
         break;
       }
@@ -178,23 +174,23 @@ void Image::output(std::string filename, bool trim) const {
     /* Find left and right of image. */
     for (int y = 0; y < size.y; y++) {
       for (int x = 0; x < size.x; x++) {
-        if (data[y * size.x + x].A > 0) {
+        if (data[y * size.x + x].A > prec) {
           if (left > x) left = x;
           break;
         }
       }
       for (int x = size.x - 1; x >= 0; x--) {
-        if (data[y * size.x + x].A > 0) {
+        if (data[y * size.x + x].A > prec) {
           if (right < x) right = x;
           break;
         }
       }
     }
-    width = right - left;
+    width = right - left + 1;
 
     /* Find bottom of image. */
     for (int i = (size.x * size.y) - 1; i >= 0; i--) {
-      if (data[i].A > 0) {
+      if (data[i].A > prec) {
         height = (i / size.x) - top + 1;
         break;
       }
@@ -251,9 +247,14 @@ void Image::output(std::string filename, bool trim) const {
   if (setjmp(png_jmpbuf(png_ptr))){
     throw std::runtime_error(filename + ": writing failed.");
   }
+  Pixel::charval* chars = new Pixel::charval[width];
   for (int i = top; i < (top + height); i++){
-    png_write_row(png_ptr, (png_byte*)(data + i*size.x + left));
+    for (int x = 0; x < width; x++) {
+      chars[x] = data[i*size.x + x].chars();
+    }
+    png_write_row(png_ptr, (png_byte*)chars);
   }
+  delete [] chars;
 
 
   /* end write */

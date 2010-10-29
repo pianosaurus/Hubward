@@ -252,7 +252,8 @@ Renderer::RenderList Renderer::make_renderers(const std::string& options,
 
 /* Construct renderer. */
 Renderer::Renderer(const std::string& filename, const recipe& options)
-  : options(options), filename(filename), image(0), finalised(false) {
+  : options(options), filename(filename),
+    image(0), lightbuffer(0), dpos(0), finalised(false) {
   /* Make a local copy of the default colours. */
   for (int i = 0; i < 256; i++) {
     colours[i] = default_colours[i];
@@ -268,6 +269,8 @@ Renderer::~Renderer() {
   }
 
   delete image;
+  delete [] lightbuffer;
+  delete [] dpos;
 }
 
 /* Let the renderer know the coordinates of the map corners. */
@@ -308,6 +311,10 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
       /* Oblique TOP or BOTTOM is not possible. */
       throw std::runtime_error("Invalid oblique direction for allocation.");
     }
+
+    /* Allocate space for lighting buffer. */
+    lightbuffer = new Pixel[image->dimensions().x * 128];
+    dpos = new int[image->dimensions().x / 16];
   }
 
   /* Allocate for all overlays too. */
@@ -318,7 +325,7 @@ void Renderer::set_surface(const Level::position& top_right_chunk,
 }
 
 /* Pass a chunk to the renderer and let it do its thing. */
-void Renderer::render(const chunkbox& chunks) {
+void Renderer::render(const Chunk& chunk) {
   if (!options.oblique.first) {
     /* Flat map. Render it unrotated. We may rotate it when
        all chunks are rendered. */
@@ -326,17 +333,18 @@ void Renderer::render(const chunkbox& chunks) {
       for (int z = 0; z < 16; z++) {
         Pixel dot;
         for (int y = 127; y >= 0; y--) {
-          blendblock(chunks, pvector(x, z, y), TOP, dot);
-          if (dot.A == 0xff) {
+          blendblock(chunk, pvector(x, z, y), TOP, dot);
+          if (dot.A >= 1.0f - 0.004f) {
             /* Done with this pixel. */
+            dot.A = 1.0f;
             break;
           }
         }
 
         /* Paint new dot to map. */
-        int img_x = (bottom_left.z - chunks.center->get_position().z) * 16
+        int img_x = (bottom_left.z - chunk.get_position().z) * 16
           + (15 - z);
-        int img_y = (chunks.center->get_position().x - top_right.x) * 16 + x;
+        int img_y = (chunk.get_position().x - top_right.x) * 16 + x;
         (*image)(img_x, img_y) = dot;
       }
     }
@@ -351,29 +359,29 @@ void Renderer::render(const chunkbox& chunks) {
       switch (options.dir.first) {
       case N:
         /* Facing north. */
-        off_x = (bottom_left.z - chunks.center->get_position().z) * 16;
-        off_y = (chunks.center->get_position().x - top_right.x) * 16
+        off_x = (bottom_left.z - chunk.get_position().z) * 16;
+        off_y = (chunk.get_position().x - top_right.x) * 16
           + 127 + 16;
         break;
 
       case E:
         /* Facing east. */
-        off_x = (chunks.center->get_position().x - top_right.x) * 16;
-        off_y = (chunks.center->get_position().z - top_right.z) * 16
+        off_x = (chunk.get_position().x - top_right.x) * 16;
+        off_y = (chunk.get_position().z - top_right.z) * 16
           + 127 + 16;
         break;
 
       case S:
         /* Facing south. */
-        off_x = (chunks.center->get_position().z - top_right.z) * 16;
-        off_y = (bottom_left.x - chunks.center->get_position().x) * 16
+        off_x = (chunk.get_position().z - top_right.z) * 16;
+        off_y = (bottom_left.x - chunk.get_position().x) * 16
           + 127 + 16;
         break;
 
       case W:
         /* Facing west. */
-        off_x = (bottom_left.x - chunks.center->get_position().x) * 16;
-        off_y = (bottom_left.z - chunks.center->get_position().z) * 16
+        off_x = (bottom_left.x - chunk.get_position().x) * 16;
+        off_y = (bottom_left.z - chunk.get_position().z) * 16
           + 127 + 16;
         break;
       }
@@ -388,8 +396,9 @@ void Renderer::render(const chunkbox& chunks) {
           Pixel dot;
           if (front_to_back) {
             dot = (*image)(img_x, img_y);
-            if (dot.A == 0xff) {
+            if (dot.A >= 1.0f - 0.004f) {
               /* Pixel is already finished. */
+              dot.A = 1.0f;
               continue;
             }
           }
@@ -437,9 +446,45 @@ void Renderer::render(const chunkbox& chunks) {
             }
 
             /* Blend the current block onto the pixel. */
-            blendblock(chunks, pos, step, dot);
-            if (dot.A == 0xff) {
-              /* Done with this pixel. */
+            int lbufferpos = img_x * 128 + pos.y;
+            if ((depth == 0) && (step & CARDINAL)) {
+              /* Front of chunk. */
+              if (front_to_back) {
+                /* Chunk in front saved lighting data. */
+                double light = lightbuffer[lbufferpos].A;
+                if (dpos[off_x / 16] != off_y + 16) {
+                  light = 0; // Chunk in front doesn't exist.
+                }
+                blendpixel(getblock(chunk, pos, step), pos.y, light, dot);
+              } else {
+                /* Don't render. Save colour value for chunk in front. */
+                lightbuffer[lbufferpos] = getblock(chunk, pos, step);
+              }
+
+            } else if ((depth == 15) && (step & TOP)) {
+              /* Back of chunk. */
+              if (front_to_back) {
+                /* Render and save lighting data for chunk behind. */
+                blendblock(chunk, pos, step, dot);
+                lightbuffer[lbufferpos].A = getlight(chunk, pos, ALL);
+              } else {
+                /* Render self and saved colour value from chunk in front. */
+                blendblock(chunk, pos, step, dot);
+                if (dpos[off_x / 16] == off_y - 16) {
+                  /* Chunk behind exists. */
+                  blendpixel(lightbuffer[lbufferpos], pos.y,
+                             getlight(chunk, pos, ALL), dot);
+                }
+              }
+
+            } else {
+              /* Inside chunk. */
+              blendblock(chunk, pos, step, dot);
+            }
+
+            /* We are done with this pixel if it is opaque. */
+            if (dot.A >= 1.0f - 0.004f) {
+              dot.A = 1.0f;
               break;
             }
 
@@ -466,6 +511,9 @@ void Renderer::render(const chunkbox& chunks) {
         }
       }
 
+      /* Remember depth of this chunk. */
+      dpos[off_x / 16] = off_y;
+
     } else if (options.dir.first & ORDINAL) {
       /* TODO: Render oblique images. */
     } else {
@@ -476,7 +524,7 @@ void Renderer::render(const chunkbox& chunks) {
   /* Render all overlays too. */
   for (RenderList::iterator overlay = overlays.begin();
        overlay != overlays.end(); ++overlay) {
-    (*overlay)->render(chunks);
+    (*overlay)->render(chunk);
   }
 }
 
@@ -519,7 +567,8 @@ void Renderer::finalise() {
 
 /* Finalise and save image. */
 void Renderer::save() {
-  finalise();
+  if (!finalised)
+    finalise();
 
   /* Trim on ordinal rotations and all oblique angles. */
   bool trim = options.oblique.first || (options.dir.first & ORDINAL);
@@ -528,34 +577,27 @@ void Renderer::save() {
 }
 
 /* Get colour value of a block. */
-Pixel Renderer::getblock(const chunkbox& chunks, pvector pos,
+Pixel Renderer::getblock(const Chunk& chunk, pvector pos,
                          direction dir) {
-  /* Get a proper target. */
-  Chunk* target = fixpvector(chunks, pos);
-
   /* Fetch block from target. */
-  unsigned char type = target->blocks(pos);
+  unsigned char type = chunk.blocks(pos);
   Pixel result = (dir & TOP) ? colours[type].top : colours[type].side;
 
   if (type == 0x08 || type == 0x09) {
-    test = true;
     /* Block is water. Set alpha based on depth. */
     try {
-      unsigned char invdepth = target->data(pos);
+      unsigned char invdepth = chunk.data(pos);
       if (invdepth > 0) {
-        result.A = 0xff - invdepth * 0x0f;
+        result.A = 1.0f - (double(invdepth) / 15.0f);
       }
     } catch (std::runtime_error& e) { /* Data was not loaded. */ }
-  } else {
-    test = false;
   }
 
   return result;
 }
 
 /* Get lighting level of a block. */
-unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
-                                 direction dir) {
+double Renderer::getlight(const Chunk& chunk, pvector pos, direction dir) {
   if (dir == TOP) {
     pos.y++;
   } else if (dir == N) {
@@ -568,38 +610,28 @@ unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
     pos.z++;
   } else if (dir == BOTTOM) {
     pos.y--;
-  } else {
+  } else if (dir != ALL) {
     throw std::runtime_error("Cannot get lighting of diagonal block.");
   }
 
-  unsigned char l_sky = 0;
-  unsigned char l_block = 0;
+  double l_sky = 0;
+  double l_block = 0;
 
   if (pos.y > 127 || pos.y < 0) {
     /* There is no lighting data above or below the map. */
-    l_sky = 255; // Fully lit by sky.
+    l_sky = 1; // Fully lit by sky.
     l_block = 0; // Not lit by other sources.
 
   } else {
-    /* Get a proper target. */
-    Chunk* target = 0;
     try {
-      target = fixpvector(chunks, pos);
-    } catch (std::range_error& e) {
-      /* Chunk is not loaded. */
+      l_sky = double(chunk.skylight(pos)) / 15.0f;
+    } catch (std::runtime_error& e) {
+      /* Skylight data not loaded. */
     }
-
-    if (target) {
-      try {
-        l_sky = target->skylight(pos) * 17;
-      } catch (std::runtime_error& e) {
-        /* Skylight data not loaded. */
-      }
-      try {
-        l_block = target->blocklight(pos) * 17;
-      } catch (std::runtime_error& e) {
-        /* Blocklight data not loaded. */
-      }
+    try {
+      l_block = double(chunk.blocklight(pos)) / 15.0f;
+    } catch (std::runtime_error& e) {
+      /* Blocklight data not loaded. */
     }
   }
 
@@ -609,20 +641,22 @@ unsigned char Renderer::getlight(const chunkbox& chunks, pvector pos,
 }
 
 /* Get a block, light it and blend behind a pixel. */
-void Renderer::blendblock(const chunkbox& chunks, pvector pos,
+void Renderer::blendblock(const Chunk& chunk, pvector pos,
                           direction dir, Pixel& top) {
-  Pixel under = getblock(chunks, pos, dir);
-  if (under.A > 0) {
-    unsigned char light = getlight(chunks, pos, dir);
-    under.light(light);
+  blendpixel(getblock(chunk, pos, dir), pos.y,
+             getlight(chunk, pos, dir), top);
+}
 
-    /* Adjust lighting slightly depending on height. */
-    if (options.dimdepth.first) {
-      under.light(pos.y + 128);
-    }
-    if (under.A > 0) {
-      top.blend_under(under);
-    }
+/* Blend a pixel underneath another based on light value and depth. */
+void Renderer::blendpixel(const Pixel& source, unsigned char depth,
+                          double light, Pixel& target) {
+  if (source.A > 0) {
+    Pixel mod = source;
+    mod.light(light);
+    if (options.dimdepth.first)
+      mod.light(0.5f + double(depth) / 256.0f);
+
+    target.blend_under(mod);
   }
 }
 
@@ -642,43 +676,6 @@ Renderer::direction Renderer::negate_direction(direction direction) {
   default:
     throw std::logic_error("Cannot negate compound direction.");
   }
-}
-
-/* Convert a chunkbox-pvector combo to a chunk-pvector combo. The pvector
-   passed in may point outside the center chunk. */
-Chunk* Renderer::fixpvector(const chunkbox& chunks, pvector& pos) {
-  Chunk* target = chunks.center;
-
-  /* Make sure height is valid. */
-  if (pos.y < 0 || pos.y > 127) {
-    throw std::logic_error("Trying to read data outside of valid height.");
-  }
-
-  /* Check if block is in a neighbouring chunk. */
-  if (pos.z > 15) {
-    target = chunks.west;
-    pos.z -= 16;
-  } else if (pos.z < 0) {
-    target = chunks.east;
-    pos.z += 16;
-  } else if (pos.x > 15) {
-    target = chunks.south;
-    pos.x -= 16;
-  } else if (pos.x < 0) {
-    target = chunks.north;
-    pos.x += 16;
-  }
-
-  if (pos.x > 15 || pos.x < 0 || pos.z > 15 || pos.z < 0) {
-    /* Target is outside chunkbox. */
-    throw std::range_error("Attempting to read data from unloaded chunk.");
-  }
-  if (!target) {
-    /* Chunk doesn't exist. */
-    throw std::range_error("Attempting to read data from nonexisting chunk.");
-  }
-
-  return target;
 }
 
 /* Return a reference to the image. Can only be done after it has been

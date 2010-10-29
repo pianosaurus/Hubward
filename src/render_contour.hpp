@@ -15,14 +15,12 @@ public:
 
 protected:
   /* Get colour value of a block. */
-  virtual Pixel getblock(const chunkbox& chunks, pvector pos,
-                         direction dir);
+  virtual Pixel getblock(const Chunk& chunk, pvector pos, direction dir);
 
   /* Get lighting value of a block. */
-  virtual unsigned char getlight(const chunkbox& chunks, pvector pos,
-                                 direction dir);
+  virtual double getlight(const Chunk& chunk, pvector pos, direction dir);
 
-  /* Make overlay transparent. */
+  /* Draw contours from heightmap. */
   virtual void finalise();
 };
 

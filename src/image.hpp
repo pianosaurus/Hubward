@@ -1,8 +1,6 @@
 #ifndef H_IMAGE
 #define H_IMAGE
 
-#include "pvector.hpp"
-
 #include <string>
 
 class Pixel;

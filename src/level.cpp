@@ -140,9 +140,6 @@ void Level::render(list<Renderer*>& renderers) {
     (*renderer)->set_surface(top_right, bottom_left);
   }
 
-  /* Initialize iterator for deleting chunks we are finished with. */
-  chunkmap::reverse_iterator deleter = chunks.rbegin();
-
   /* Load and render chunks in parallel. */
   debug << "Initializing parallel loading..." << std::endl;
 #pragma omp parallel sections
@@ -170,66 +167,23 @@ void Level::render(list<Renderer*>& renderers) {
     {
       /* Render loaded chunks. */
       for (chunkmap::reverse_iterator it = chunks.rbegin();
-      it != chunks.rend(); ++it) {
-        /* Calculate positions of bordering chunks. */
-        position border_pos[4];
-        border_pos[0] = it->first;
-        border_pos[0].first--;  // North
-        border_pos[1] = it->first;
-        border_pos[1].second--; // East
-        border_pos[2] = it->first;
-        border_pos[2].first++;  // South
-        border_pos[3] = it->first;
-        border_pos[3].second++; // West
-
-        /* Wait for the chunk's final requirement to load. */
-        chunkmap::iterator reqit;
-        chunkmap::iterator reqwait = it.base();
-        reqwait--;
-        if ((reqit = chunks.find(border_pos[1])) != chunks.end()) {
-          /* East chunk exists. */
-          reqwait = reqit;
-        }
-        if ((reqit = chunks.find(border_pos[0])) != chunks.end()) {
-          /* North chunk exists. */
-          reqwait = reqit;
-        }
-        {
-          Chunk* chunk;
+           it != chunks.rend(); ++it) {
+        /* Wait for chunk to load. */
+        Chunk* chunk;
 #pragma omp critical(chunks)
-          chunk = reqwait->second.second;
-          while (chunk == 0) {
-            /* Give up a timeslice. */
-            yield();
+        chunk = it->second.second;
+        while (chunk == 0) {
+          /* Give up a timeslice. */
+          yield();
 #pragma omp critical(chunks)
-            chunk = reqwait->second.second;
-          }
-        }
-
-        /* Chunks are loaded. Get pointers. */
-        Renderer::chunkbox chunkbox = {it->second.second, 0, 0, 0, 0};
-        /* North */
-        if ((reqit = chunks.find(border_pos[0])) != chunks.end()) {
-          chunkbox.north = reqit->second.second;
-        }
-        /* East */
-        if ((reqit = chunks.find(border_pos[1])) != chunks.end()) {
-          chunkbox.east = reqit->second.second;
-        }
-        /* South */
-        if ((reqit = chunks.find(border_pos[2])) != chunks.end()) {
-          chunkbox.south = reqit->second.second;
-        }
-        /* West */
-        if ((reqit = chunks.find(border_pos[3])) != chunks.end()) {
-          chunkbox.west = reqit->second.second;
+          chunk = it->second.second;
         }
 
         /* We have a chunk. Try to render it. */
         for (list<Renderer*>::iterator renderer = renderers.begin();
              renderer != renderers.end(); ++renderer) {
           try {
-            (*renderer)->render(chunkbox);
+            (*renderer)->render(*chunk);
           } catch (std::exception& e) {
             std::cerr << "Failed to render chunk "
                       << it->first.second << "x"
@@ -238,23 +192,11 @@ void Level::render(list<Renderer*>& renderers) {
           }
         }
 
-        /* Delete chunks that will no longer be needed. */
-        while (((deleter->first.first == it->first.first + 1) &&
-                deleter->first.second >= it->first.second) ||
-               (deleter->first.first > it->first.first + 1)) {
-          delete deleter->second.second;
-          deleter->second.second = 0;
-          ++deleter;
-        }
+        /* Delete the chunk from memory. */
+        delete chunk;
+        it->second.second = 0;
       }
     }
-  }
-
-  /* We are done. Delete the rest of the chunks from memory. */
-  while (deleter != chunks.rend()) {
-    delete deleter->second.second;
-    deleter->second.second = 0;
-    ++deleter;
   }
 
   /* Finalise all renderers. */

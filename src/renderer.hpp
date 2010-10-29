@@ -16,16 +16,7 @@ class Image;
  * This class does the default rendering and outputs to filesystem.
  */
 class Renderer {
-  bool test;
 public:
-  struct chunkbox {
-    Chunk* center; // Chunk being rendered.
-    Chunk* north;  // North neighbour.
-    Chunk* east;   // East neighbour.
-    Chunk* south;  // South neighbour.
-    Chunk* west;   // West neighbour.
-  };
-
   /* A direction enum. */
   enum direction {
     TOP = 1,
@@ -82,7 +73,7 @@ public:
                    const Level::position& bottom_left_chunk);
 
   /* Pass a chunk to the renderer and let it do its thing. */
-  void render(const chunkbox& chunks);
+  void render(const Chunk& chunk);
 
   /* Make any last minute adjustments. */
   virtual void finalise();
@@ -125,6 +116,10 @@ protected:
   /* Rendered image. */
   Image* image;
 
+  /* Buffer for lighting data outside of chunk. */
+  Pixel* lightbuffer;
+  int* dpos;
+
   /* Overlays. */
   RenderList overlays;
 
@@ -132,23 +127,21 @@ protected:
   bool finalised;
 
   /* Get unlit colour value of a block. */
-  virtual Pixel getblock(const chunkbox& chunks, pvector pos,
-                         direction dir);
+  virtual Pixel getblock(const Chunk& chunk, pvector pos, direction dir);
 
   /* Get lighting value of a block. */
-  virtual unsigned char getlight(const chunkbox& chunks, pvector pos,
-                                 direction dir);
+  virtual double getlight(const Chunk& chunk, pvector pos, direction dir);
 
   /* Get a block, light it and blend behind a pixel. */
-  virtual void blendblock(const chunkbox& chunks, pvector pos,
+  virtual void blendblock(const Chunk& chunks, pvector pos,
                           direction dir, Pixel& top);
+
+  /* Blend a pixel underneath another based on light value and depth. */
+  virtual void blendpixel(const Pixel& source, unsigned char depth,
+                          double light, Pixel& target);
 
   /* Negate a cardinal or ordinal direction. */
   static direction negate_direction(direction direction);
-
-  /* Convert a chunkbox-pvector combo to a chunk-pvector combo. The pvector
-     passed in may point outside the center chunk. */
-  static Chunk* fixpvector(const chunkbox& chunks, pvector& pos);
 
   /* Add another renderer as an overlay to this one. This will take
      ownership, and the overlays will be deleted along with self. */

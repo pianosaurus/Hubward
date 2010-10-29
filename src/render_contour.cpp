@@ -6,7 +6,7 @@
 Render_Contour::Render_Contour(const std::string& filename,
                                const recipe& options)
   : Renderer(filename, options) {
-  this->options.dimdepth = boolopt(false, "litdepth");
+  this->options.dimdepth = boolopt(false, "");
 
   /* Make most blocks invisible. We don't want buildings to show up. */
   for (int i = 0; i < 256; i++) {
@@ -26,60 +26,60 @@ Render_Contour::Render_Contour(const std::string& filename,
 
 /* The top of blocks divisible by 5 are black. The rest is white. Some
    blocks are invisible. */
-Pixel Render_Contour::getblock(const chunkbox& chunks, pvector pos,
+Pixel Render_Contour::getblock(const Chunk& chunk, pvector pos,
                                direction dir) {
-  /* Get a proper target. */
-  Chunk* target = fixpvector(chunks, pos);
-
   /* Fetch block from target. */
-  unsigned char type = target->blocks(pos);
-  Pixel result = (dir & TOP) ? colours[type].top : colours[type].side;
+  unsigned char type = chunk.blocks(pos);
+  bool top = dir & TOP;
+  Pixel original = (dir & TOP) ? colours[type].top : colours[type].side;
 
   /* Transparent and partly transparent blocks are invisible. */
-  if (result.A < 0xff) {
-    return Pixel(0, 0, 0, 0);
+  if (original.A < 1-0.005f) {
+    return Pixel(0.0f, 0.0f, 0.0f, 0.0f);
   }
 
-  /* Tops are black if divisible by 5 (offset for default shoreline). */
-  if ((dir & TOP) && (pos.y % 5 == 3)) {
-    /* But only if there is a neighbouring transparent block. */
-    bool air = false;
-    try {
-      air = air ||
-        (Renderer::getblock(chunks, pos + pvector(1, 0, 0), TOP).A < 0xff);
-    } catch (std::exception& e) {}
-    try {
-      air = air ||
-        (Renderer::getblock(chunks, pos + pvector(0, 1, 0), TOP).A < 0xff);
-    } catch (std::exception& e) {}
-    try {
-      air = air ||
-        (Renderer::getblock(chunks, pos - pvector(1, 0, 0), TOP).A < 0xff);
-    } catch (std::exception& e) {}
-    try {
-      air = air ||
-        (Renderer::getblock(chunks, pos - pvector(0, 1, 0), TOP).A < 0xff);
-    } catch (std::exception& e) {}
-
-    if (air)
-      return Pixel(0, 0, 0, 0xff);
-  }
-
-  return Pixel(0xff, 0xff, 0xff, 0xff);
+  /* Remember height value of blocks in the green channel. */
+  return Pixel(0.0f, pos.y - (top ? 0 : 1), 0.0f, 1.0f);
 }
 
 /* Everything is fully lit in contour mode. */
-unsigned char Render_Contour::getlight(const chunkbox& chunks,
-                                       pvector pos,
-                                       direction dir) {
-  return 255;
+double Render_Contour::getlight(const Chunk& chunk, pvector pos,
+                                direction dir) {
+  return 1.0f;
 }
 
-/* Finalise and save. */
+/* Draw contours from heightmap. */
 void Render_Contour::finalise() {
   if (image) {
-    /* Make white transparent. */
-    image->colour_replace(Pixel(0xff, 0xff, 0xff, 0xff), Pixel(0, 0, 0, 0));
+    /* Create contour lines from data image. */
+    const Image::ivector size = image->dimensions();
+    Image* target = new Image(size);
+
+    for (int x = 0; x < size.x; x++) {
+      for (int y = 0; y < size.y; y++) {
+        const unsigned char height = (*image)(x, y).G;
+
+        /* Lines every 5 meters, offset for shoreline. */
+        if (((*image)(x, y).A > 0) && (height % 5 == 3)) {
+          /* Pixel only visible if a nearby pixel is lower. */
+          bool edge = false;
+          if ((x > 0) && (*image)(x - 1, y).G < height) edge = true;
+          if ((y > 0) && (*image)(x, y - 1).G < height) edge = true;
+          if ((x < (size.x - 1)) &&
+              (*image)(x + 1, y).G < height) edge = true;
+          if ((y < (size.y - 1)) &&
+              (*image)(x, y + 1).G < height) edge = true;
+
+          if (edge) {
+            (*target)(x, y) = Pixel(0.0f, 0.0f, 0.0f, 1.0f);
+          }
+        }
+      }
+    }
+
+    delete image;
+    image = target;
   }
+
   Renderer::finalise();
 }
