@@ -1,0 +1,9 @@
+v0.0.6-alpha1:
+        - Made glass more transparent.
+        - Code is c++98-valid now, and should compile on mac.
+        - Got rid of back-to-front rendering glitch.
+        - Chunk-by-chunk rendering, drastically redusing memory requirements.
+        - Code cleanup.
+
+v0.0.5-alpha1:
+        Initial release.
